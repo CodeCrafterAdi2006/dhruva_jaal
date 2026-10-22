@@ -1176,6 +1176,205 @@ html, body {
   color: #00E5FF !important;
 }
 
+/* ==========================================================================
+   Step 4.4: Tactical Node Inspection Popovers
+   ========================================================================== */
+
+.maplibregl-popup.tactical-map-popup {
+  z-index: 1000 !important;
+}
+
+.maplibregl-popup.tactical-map-popup .maplibregl-popup-content {
+  background: rgba(14, 23, 38, 0.95) !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+  border: 1px solid var(--border-subtle) !important;
+  border-radius: 8px !important;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.65) !important;
+  padding: 12px 14px !important;
+  width: 290px !important;
+  color: var(--text-primary) !important;
+  font-family: var(--font-ui) !important;
+}
+
+.maplibregl-popup.tactical-map-popup .maplibregl-popup-tip {
+  border-top-color: rgba(14, 23, 38, 0.95) !important;
+  border-bottom-color: rgba(14, 23, 38, 0.95) !important;
+}
+
+.tactical-popup-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.popup-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border-subtle);
+  padding-bottom: 8px;
+}
+
+.popup-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-primary);
+  flex: 1;
+  margin-left: 8px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.popup-badge {
+  font-size: 9px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  padding: 2px 6px;
+  border-radius: 3px;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+
+.badge-dongle { background: rgba(239, 68, 68, 0.2); color: #EF4444; border: 1px solid #EF4444; }
+.badge-relay { background: rgba(66, 133, 244, 0.2); color: #4285F4; border: 1px solid #4285F4; }
+.badge-helper { background: rgba(46, 230, 107, 0.2); color: #2ee66b; border: 1px solid #2ee66b; }
+.badge-drone { background: rgba(255, 176, 32, 0.2); color: #FFB020; border: 1px solid #FFB020; }
+.badge-balloon { background: rgba(0, 229, 255, 0.2); color: #00E5FF; border: 1px solid #00E5FF; }
+.badge-tower { background: rgba(100, 116, 139, 0.25); color: #94A3B8; border: 1px solid #94A3B8; }
+
+.popup-close-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 2px;
+  transition: color 0.15s ease;
+}
+
+.popup-close-btn:hover {
+  color: var(--text-primary);
+}
+
+.popup-body {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 11px;
+}
+
+.popup-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.popup-label {
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--text-muted);
+  letter-spacing: 0.5px;
+  font-family: var(--font-mono);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.popup-val {
+  font-size: 10.5px;
+  color: var(--text-secondary);
+  text-align: right;
+  font-family: var(--font-mono);
+  word-break: break-word;
+}
+
+.val-online { color: var(--status-healthy) !important; font-weight: 600; }
+.val-stored { color: #F5B942 !important; font-weight: 700; }
+.val-down { color: #EF4444 !important; font-weight: 700; }
+.val-warn { color: #FFB020 !important; font-weight: 600; }
+
+.popup-divider {
+  height: 1px;
+  background: var(--border-subtle);
+  margin: 4px 0;
+}
+
+.popup-section-title {
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--text-muted);
+  letter-spacing: 0.5px;
+  font-family: var(--font-mono);
+}
+
+.popup-peers-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+.popup-peer-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  background: rgba(11, 18, 32, 0.6);
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  padding: 3px 6px;
+  font-size: 10px;
+  font-family: var(--font-mono);
+}
+
+.peer-id {
+  color: var(--text-primary);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.peer-dist {
+  color: var(--text-muted);
+  font-size: 9px;
+  margin-left: auto;
+}
+
+.peer-rssi {
+  font-weight: 700;
+  padding: 1px 4px;
+  border-radius: 2px;
+  font-size: 9.5px;
+}
+
+.peer-rssi.rssi-strong { color: var(--status-healthy); background: rgba(52, 199, 89, 0.15); }
+.peer-rssi.rssi-medium { color: var(--status-warning); background: rgba(245, 185, 66, 0.15); }
+.peer-rssi.rssi-weak { color: var(--status-alert); background: rgba(239, 68, 68, 0.15); }
+
+.popup-notice {
+  font-size: 10px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  line-height: 1.3;
+  margin-top: 4px;
+}
+
+.notice-info {
+  background: rgba(66, 133, 244, 0.12);
+  border: 1px solid rgba(66, 133, 244, 0.3);
+  color: #93C5FD;
+}
+
+.notice-alert {
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #FCA5A5;
+}
+
+
 
 
 

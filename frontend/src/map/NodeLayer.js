@@ -1,4 +1,5 @@
 import scenarioData from '../data/scenario.json';
+import { estimateDistanceMeters } from '../config.js';
 
 const getMapLibre = () => window.maplibregl;
 
@@ -8,6 +9,10 @@ export class NodeLayer {
     this.scenario = scenarioData;
     this.towerMarkers = new Map();
     this.nodeMarkers = new Map();
+    this.aerialMarkers = new Map();
+    this.activePopup = null;
+    this.selectedNodeId = null;
+    this.latestState = null;
   }
 
   init() {
@@ -51,6 +56,11 @@ export class NodeLayer {
       })
         .setLngLat([tower.lon, tower.lat])
         .addTo(this.map);
+
+      el.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.openNodePopup(tower.id, [tower.lon, tower.lat]);
+      });
 
       this.towerMarkers.set(tower.id, { marker, element: el, data: tower });
     });
@@ -111,6 +121,11 @@ export class NodeLayer {
       })
         .setLngLat([node.lon, node.lat])
         .addTo(this.map);
+
+      el.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.openNodePopup(node.id, [node.lon, node.lat]);
+      });
 
       this.nodeMarkers.set(node.id, { marker, element: el, data: node });
     });
@@ -179,6 +194,12 @@ export class NodeLayer {
       })
         .setLngLat([node.lon, node.lat])
         .addTo(this.map);
+
+      el.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const currentLngLat = marker.getLngLat();
+        this.openNodePopup(node.id, [currentLngLat.lng, currentLngLat.lat]);
+      });
 
       this.aerialMarkers.set(node.id, {
         marker,
@@ -301,14 +322,176 @@ export class NodeLayer {
             if (aerostatEl) aerostatEl.style.transform = `translateY(-${liftPx}px)`;
             if (tetherEl) tetherEl.style.height = `${liftPx}px`;
 
-            const subEl = element.querySelector('.balloon-sub');
-            if (subEl) subEl.textContent = p < 1 ? `Ascending (${Math.round(p * 100)}m)...` : '100m tethered aerostat';
-          }
-        } else {
-          element.style.display = 'none';
-        }
-      });
+    this.latestState = state;
+
+    // Refresh active popup if currently open during playback
+    if (this.activePopup && this.selectedNodeId) {
+      const container = this.activePopup.getElement().querySelector('.tactical-popup-container');
+      if (container) {
+        container.innerHTML = this.buildPopupHtml(this.selectedNodeId);
+      }
     }
+  }
+
+  /**
+   * Step 4.4: Open tactical inspection popover on node click
+   */
+  openNodePopup(nodeId, lngLat) {
+    const ML = getMapLibre();
+    if (!ML || !this.map) return;
+
+    if (this.activePopup) {
+      this.activePopup.remove();
+    }
+
+    this.selectedNodeId = nodeId;
+
+    const popupContent = document.createElement('div');
+    popupContent.className = 'tactical-popup-container';
+    popupContent.innerHTML = this.buildPopupHtml(nodeId);
+
+    popupContent.addEventListener('click', (e) => {
+      if (e.target.closest('.popup-close-btn')) {
+        this.activePopup?.remove();
+        this.activePopup = null;
+        this.selectedNodeId = null;
+      }
+    });
+
+    this.activePopup = new ML.Popup({
+      offset: 18,
+      closeButton: false,
+      closeOnClick: true,
+      className: 'tactical-map-popup'
+    })
+      .setLngLat(lngLat)
+      .setDOMContent(popupContent)
+      .addTo(this.map);
+
+    this.activePopup.on('close', () => {
+      this.activePopup = null;
+      this.selectedNodeId = null;
+    });
+  }
+
+  /**
+   * Generate tactical popover HTML for a clicked node, tower, or aerial relay
+   */
+  buildPopupHtml(nodeId) {
+    // 1. Check if Cell Tower
+    const tower = this.scenario.cellTowers.find(t => t.id === nodeId);
+    if (tower) {
+      const isOnline = this.latestState ? this.latestState.towersOnline : true;
+      return `
+        <div class="popup-header">
+          <div class="popup-badge badge-tower">CELL TOWER</div>
+          <div class="popup-title">${tower.name}</div>
+          <button class="popup-close-btn" title="Close">✕</button>
+        </div>
+        <div class="popup-body">
+          <div class="popup-row">
+            <span class="popup-label">COORDINATES</span>
+            <span class="popup-val">${tower.lat.toFixed(4)}° N, ${tower.lon.toFixed(4)}° E</span>
+          </div>
+          <div class="popup-row">
+            <span class="popup-label">NETWORK STATUS</span>
+            <span class="popup-val ${isOnline ? 'val-online' : 'val-down'}">${isOnline ? '● 4G/LTE Active' : '✕ OFFLINE (Power & Fiber Severed)'}</span>
+          </div>
+          <div class="popup-row">
+            <span class="popup-label">INFRASTRUCTURE</span>
+            <span class="popup-val">Macro Cellular Base Station</span>
+          </div>
+          <div class="popup-notice ${isOnline ? 'notice-info' : 'notice-alert'}">
+            ${isOnline ? 'Serving standard civilian smartphones. Vulnerable to flood-induced power cuts.' : 'Flooding severed municipal power grid and terrestrial fiber backhaul.'}
+          </div>
+        </div>
+      `;
+    }
+
+    // 2. Mesh Node or Aerial Relay
+    const node = this.scenario.nodes.find(n => n.id === nodeId);
+    if (!node) return '<div class="popup-body">Node not found</div>';
+
+    const nodeState = this.latestState?.nodes?.find(n => n.id === nodeId);
+    const isOnline = nodeState ? nodeState.status === 'online' : true;
+    const isHoldingSos = this.latestState?.sosStates?.some(s => s.from === nodeId && s.state === 'STORED');
+    const isLowBattery = nodeState?.batteryStatus?.includes('LOW');
+
+    // Role badge
+    let badgeClass = 'badge-relay';
+    let badgeText = 'RELAY';
+    if (node.role === 'dongle') { badgeClass = 'badge-dongle'; badgeText = 'DONGLE (SURVIVOR)'; }
+    else if (node.role === 'helper') { badgeClass = 'badge-helper'; badgeText = 'BASE CAMP (HQ)'; }
+    else if (node.role === 'drone') { badgeClass = 'badge-drone'; badgeText = 'AERIAL DRONE (80m)'; }
+    else if (node.role === 'balloon') { badgeClass = 'badge-balloon'; badgeText = 'AEROSTAT BALLOON (100m)'; }
+
+    // Status text
+    let statusText = '● Online (433 MHz SF10)';
+    let statusClass = 'val-online';
+    if (isHoldingSos) {
+      statusText = '⏳ STORED IN DONGLE (Waiting for mesh)';
+      statusClass = 'val-stored';
+    } else if (!isOnline) {
+      statusText = '⚠ NODE DOWN (Submerged in Flood)';
+      statusClass = 'val-down';
+    } else if (isLowBattery) {
+      statusText = '⚠ Low Battery · Returning to Base';
+      statusClass = 'val-warn';
+    }
+
+    // Connected RF neighbors
+    const edges = this.scenario.edges.filter(e => e.a === nodeId || e.b === nodeId);
+    const isElevated = node.role === 'drone' || node.role === 'balloon';
+
+    const peersHtml = edges.map(edge => {
+      const peerId = edge.a === nodeId ? edge.b : edge.a;
+      const peerNode = this.scenario.nodes.find(n => n.id === peerId);
+      const isPeerElevated = peerNode?.role === 'drone' || peerNode?.role === 'balloon';
+      const dist = estimateDistanceMeters(edge.rssi_dbm, isElevated || isPeerElevated);
+
+      let rssiClass = 'rssi-strong';
+      if (edge.rssi_dbm < -100) rssiClass = 'rssi-weak';
+      else if (edge.rssi_dbm < -80) rssiClass = 'rssi-medium';
+
+      return `
+        <div class="popup-peer-item">
+          <span class="peer-id">➔ ${peerId} (${peerNode?.label || 'Peer'})</span>
+          <span class="peer-dist">~${dist}m est.</span>
+          <span class="peer-rssi ${rssiClass}">${edge.rssi_dbm} dBm</span>
+        </div>
+      `;
+    }).join('') || '<div class="popup-no-peers">No peer links configured</div>';
+
+    return `
+      <div class="popup-header">
+        <div class="popup-badge ${badgeClass}">${badgeText}</div>
+        <div class="popup-title">${node.id} · ${node.label}</div>
+        <button class="popup-close-btn" title="Close">✕</button>
+      </div>
+      <div class="popup-body">
+        <div class="popup-row">
+          <span class="popup-label">LOCATION</span>
+          <span class="popup-val">${node.place || 'Patrol Sector'}</span>
+        </div>
+        <div class="popup-row">
+          <span class="popup-label">COORDINATES</span>
+          <span class="popup-val">${node.lat.toFixed(4)}° N, ${node.lon.toFixed(4)}° E · Alt: ${node.alt_m}m</span>
+        </div>
+        <div class="popup-row">
+          <span class="popup-label">OPERATIONAL STATUS</span>
+          <span class="popup-val ${statusClass}">${statusText}</span>
+        </div>
+        <div class="popup-row">
+          <span class="popup-label">HARDWARE SPECS</span>
+          <span class="popup-val">ESP32-C3 · SX1278 @ 433MHz · SF10 / 125kHz</span>
+        </div>
+        <div class="popup-divider"></div>
+        <div class="popup-section-title">CALIBRATED RF NEIGHBORS (${edges.length})</div>
+        <div class="popup-peers-list">
+          ${peersHtml}
+        </div>
+      </div>
+    `;
   }
 }
 

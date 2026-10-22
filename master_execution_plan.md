@@ -130,7 +130,7 @@ frontend/
   - **Drones (`t=54s`):** Launch from `N8` (Safe Ground), animate along smooth flight paths to `DR1`/`DR2` coordinates over `6s` with a faint dashed flight trail, spinning quadcopter SVG, ground shadow dot, and `"DRONE 1 · 80 m"` tag.
   - **Balloons (`t=66s`):** Inflate and rise vertically from safe-ground anchor points (`BL1`, `BL2`) over `8s`. Draw a vertical tether line connecting the ground anchor dot to the glowing cyan-white teardrop aerostat icon, with gentle horizontal sway and label `"BALLOON 1 · 100 m tethered"`.
   - **Make-Before-Break Handoff & Recall (`t=74s`–`t=83s`):** Bring balloon links online at `t=74s`, display `"Link handoff: no coverage gap"`, show `"battery low (illustrative)"` on drones, and fly `DR1`/`DR2` back to `N8` at `t=78s`.
-- [ ] **Step 4.4: Node Inspection Popovers**
+- [x] **Step 4.4: Node Inspection Popovers**
   - Clicking any node opens a tactical popover displaying: Role, Place name, Status, Connected Neighbors with live RSSI + Log-Distance Estimated Distance (`"~420 m (estimated)"`), Dongle Queue size, or Aerial Altitude/Tether status.
 
 ---
