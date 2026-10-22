@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>LoRa Mesh Network | Disaster Visualizer</title>
+
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+
+  <!-- Google Fonts: Inter & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap"
+    rel="stylesheet">
+</head>
+
+<body>
+  <div id="app-layout">
+    <!-- Left: 80% Map Viewport -->
+    <main id="map-viewport">
+      <div id="map"></div>
+
+      <!-- Top Overlay Bar -->
+      <header class="map-overlay-header">
+        <div class="brand">
+          <span class="live-dot"></span>
+          <span class="brand-title">LoRa MESH NETWORK</span>
+          <span class="brand-badge">DISASTER RELIEF · SEARCH & RESCUE</span>
+        </div>
+        <div class="legend-bar">
+          <span class="legend-item"><span class="legend-pill strong"></span> Strong (-60 to -80 dBm)</span>
+          <span class="legend-item"><span class="legend-pill medium"></span> Medium (-81 to -100 dBm)</span>
+          <span class="legend-item"><span class="legend-pill weak"></span> Weak (-101 to -120 dBm)</span>
+          <span class="legend-item"><span class="legend-pill alternate"></span> Alternate Route</span>
+        </div>
+      </header>
+    </main>
+
+    <!-- Right: 20% Telemetry Sidebar -->
+    <aside id="sidebar">
+      <!-- Section 1: Message Log -->
+      <section class="sidebar-section">
+        <div class="section-header">
+          <span class="section-title">MESSAGE LOG</span>
+          <span class="status-live">● LIVE</span>
+        </div>
+        <div class="log-container" id="log-feed">
+          <div class="log-item">
+            <div class="log-meta">
+              <span class="log-time">14:32:17</span>
+              <span class="log-tag state-stored">STORED</span>
+            </div>
+            <div class="log-detail">From DONGLE (Node 1) · 64 B</div>
+          </div>
+          <div class="log-item">
+            <div class="log-meta">
+              <span class="log-time">14:32:22</span>
+              <span class="log-tag state-transit">SENT_TO_MESH</span>
+            </div>
+            <div class="log-detail">Via Node 1 → 3 → 5 → 7 → 8</div>
+          </div>
+          <div class="log-item">
+            <div class="log-meta">
+              <span class="log-time">14:32:31</span>
+              <span class="log-tag state-delivered">DELIVERED</span>
+            </div>
+            <div class="log-detail">To HELPER (Node 8) · Hop Count: 5</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Section 2: Live Nodes RSSI -->
+      <section class="sidebar-section">
+        <div class="section-header">
+          <span class="section-title">LIVE NETWORK (RSSI)</span>
+          <span class="section-count">8 NODES</span>
+        </div>
+        <div class="nodes-list" id="nodes-list">
+          <div class="node-row">
+            <span class="node-name dongle">Node 1 (DONGLE)</span>
+            <div class="meter-track"><div class="meter-fill strong" style="width: 82%"></div></div>
+            <span class="node-val">-68 dBm</span>
+          </div>
+          <div class="node-row">
+            <span class="node-name relay">Node 2 (RELAY)</span>
+            <div class="meter-track"><div class="meter-fill strong" style="width: 75%"></div></div>
+            <span class="node-val">-72 dBm</span>
+          </div>
+          <div class="node-row">
+            <span class="node-name relay">Node 3 (RELAY)</span>
+            <div class="meter-track"><div class="meter-fill medium" style="width: 65%"></div></div>
+            <span class="node-val">-78 dBm</span>
+          </div>
+          <div class="node-row">
+            <span class="node-name relay">Node 4 (RELAY)</span>
+            <div class="meter-track"><div class="meter-fill medium" style="width: 50%"></div></div>
+            <span class="node-val">-87 dBm</span>
+          </div>
+          <div class="node-row">
+            <span class="node-name relay">Node 5 (RELAY)</span>
+            <div class="meter-track"><div class="meter-fill medium" style="width: 58%"></div></div>
+            <span class="node-val">-82 dBm</span>
+          </div>
+          <div class="node-row">
+            <span class="node-name relay">Node 6 (RELAY)</span>
+            <div class="meter-track"><div class="meter-fill strong" style="width: 70%"></div></div>
+            <span class="node-val">-76 dBm</span>
+          </div>
+          <div class="node-row">
+            <span class="node-name relay">Node 7 (RELAY)</span>
+            <div class="meter-track"><div class="meter-fill strong" style="width: 78%"></div></div>
+            <span class="node-val">-70 dBm</span>
+          </div>
+          <div class="node-row">
+            <span class="node-name helper">Node 8 (HELPER)</span>
+            <div class="meter-track"><div class="meter-fill strong" style="width: 80%"></div></div>
+            <span class="node-val">-69 dBm</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Section 3: Network Stats -->
+      <section class="sidebar-section">
+        <div class="section-header">
+          <span class="section-title">NETWORK STATS</span>
+        </div>
+        <div class="stats-grid">
+          <div class="stat-box">
+            <span class="stat-label">HOP COUNT</span>
+            <span class="stat-value" id="stat-hops">5</span>
+          </div>
+          <div class="stat-box">
+            <span class="stat-label">SUCCESS RATE</span>
+            <span class="stat-value" id="stat-rate">98.7%</span>
+          </div>
+          <div class="stat-box">
+            <span class="stat-label">AVG. RSSI</span>
+            <span class="stat-value" id="stat-rssi">-77 dBm</span>
+          </div>
+          <div class="stat-box">
+            <span class="stat-label">NODES ONLINE</span>
+            <span class="stat-value" id="stat-nodes">8 / 8</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Section 4: Action Controls -->
+      <section class="sidebar-section actions">
+        <button class="btn btn-primary" id="btn-simulate">
+          <span>▶</span> Simulate Disaster
+        </button>
+        <button class="btn btn-secondary" id="btn-reset">
+          <span>↺</span> Reset Network
+        </button>
+      </section>
+    </aside>
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+
+</html>

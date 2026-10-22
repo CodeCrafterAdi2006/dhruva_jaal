@@ -1,0 +1,348 @@
+/* Design System: Google Maps Emergency Responder Dashboard */
+:root {
+  --bg-app: #0B1220;
+  --bg-map: #111B2B;
+  --bg-sidebar: #101927;
+  --bg-card: #152238;
+  --border-subtle: #263449;
+  --border-active: #4285F4;
+  
+  --text-primary: #E5EAF2;
+  --text-secondary: #8B9BB0;
+  --text-muted: #5A6D85;
+
+  --accent-blue: #4285F4;
+  --status-healthy: #34C759;
+  --status-warning: #F5B942;
+  --status-alert: #F05252;
+  --status-offline: #64748B;
+
+  --font-ui: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background-color: var(--bg-app);
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Master App Layout: 78% Map, 22% Sidebar */
+#app-layout {
+  display: flex;
+  width: 100vw;
+  height: 100vh;
+}
+
+/* Map Area (78%) */
+#map-viewport {
+  position: relative;
+  flex: 1;
+  height: 100%;
+  background: var(--bg-map);
+}
+
+#map {
+  width: 100%;
+  height: 100%;
+  background: var(--bg-map);
+}
+
+/* Custom dark tile styling */
+.leaflet-container {
+  background: var(--bg-map) !important;
+  font-family: var(--font-ui) !important;
+}
+
+/* Map Overlay Header */
+.map-overlay-header {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  right: 16px;
+  z-index: 1000;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: rgba(16, 25, 39, 0.88);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  padding: 10px 16px;
+  pointer-events: auto;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--status-healthy);
+  box-shadow: 0 0 8px var(--status-healthy);
+}
+
+.brand-title {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: var(--text-primary);
+}
+
+.brand-badge {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: rgba(38, 52, 73, 0.6);
+  padding: 2px 8px;
+  border-radius: 4px;
+  letter-spacing: 0.5px;
+}
+
+.legend-bar {
+  display: flex;
+  gap: 16px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.legend-pill {
+  width: 12px;
+  height: 3px;
+  border-radius: 2px;
+}
+
+.legend-pill.strong { background: var(--status-healthy); }
+.legend-pill.medium { background: var(--status-warning); }
+.legend-pill.weak { background: var(--status-alert); }
+.legend-pill.alternate {
+  background: repeating-linear-gradient(90deg, var(--accent-blue) 0, var(--accent-blue) 3px, transparent 3px, transparent 6px);
+}
+
+/* Sidebar Area (22%, min 320px) */
+#sidebar {
+  width: 340px;
+  height: 100%;
+  background: var(--bg-sidebar);
+  border-left: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  z-index: 1001;
+}
+
+.sidebar-section {
+  padding: 16px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.section-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  color: var(--text-secondary);
+}
+
+.status-live {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--status-healthy);
+  font-family: var(--font-mono);
+}
+
+.section-count {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+}
+
+/* Message Log */
+.log-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.log-item {
+  background: var(--bg-card);
+  border-left: 2px solid var(--accent-blue);
+  padding: 8px 10px;
+  border-radius: 3px;
+  font-size: 12px;
+}
+
+.log-meta {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 4px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.log-time {
+  color: var(--text-muted);
+}
+
+.log-tag {
+  font-weight: 600;
+  padding: 1px 4px;
+  border-radius: 2px;
+}
+
+.log-tag.state-stored { color: var(--text-secondary); background: rgba(139, 155, 176, 0.15); }
+.log-tag.state-transit { color: var(--status-warning); background: rgba(245, 185, 66, 0.15); }
+.log-tag.state-delivered { color: var(--status-healthy); background: rgba(52, 199, 89, 0.15); }
+
+.log-detail {
+  color: var(--text-primary);
+  font-size: 11px;
+}
+
+/* Live Nodes RSSI Rows */
+.nodes-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.node-row {
+  display: grid;
+  grid-template-columns: 110px 1fr 65px;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  font-family: var(--font-mono);
+}
+
+.node-name {
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.node-name.dongle { color: var(--status-alert); font-weight: 600; }
+.node-name.helper { color: var(--status-healthy); font-weight: 600; }
+
+.meter-track {
+  height: 6px;
+  background: rgba(38, 52, 73, 0.5);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.meter-fill {
+  height: 100%;
+  border-radius: 3px;
+}
+
+.meter-fill.strong { background: var(--status-healthy); }
+.meter-fill.medium { background: var(--status-warning); }
+.meter-fill.weak { background: var(--status-alert); }
+
+.node-val {
+  text-align: right;
+  color: var(--text-primary);
+}
+
+/* Network Stats Grid */
+.stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.stat-box {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.stat-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-muted);
+  letter-spacing: 0.5px;
+}
+
+.stat-value {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+}
+
+/* Action Buttons */
+.sidebar-section.actions {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: var(--font-ui);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  border: none;
+}
+
+.btn-primary {
+  background: var(--accent-blue);
+  color: #FFFFFF;
+}
+
+.btn-primary:hover {
+  background: #3367D6;
+}
+
+.btn-secondary {
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid var(--border-subtle);
+}
+
+.btn-secondary:hover {
+  background: var(--bg-card);
+  color: var(--text-primary);
+}
