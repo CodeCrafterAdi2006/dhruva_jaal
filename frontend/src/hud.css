@@ -65,21 +65,25 @@ html, body {
 }
 
 /* Map Overlay Header */
+/* Map Overlay Header */
 .map-overlay-header {
   position: absolute;
-  top: 16px;
+  top: 14px;
   left: 16px;
   right: 16px;
+  height: 44px;
   z-index: 1000;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: rgba(16, 25, 39, 0.88);
+  background: rgba(14, 23, 38, 0.90);
   backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
-  padding: 10px 16px;
+  padding: 0 16px;
   pointer-events: auto;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
 }
 
 .brand {
@@ -88,29 +92,84 @@ html, body {
   gap: 10px;
 }
 
-.live-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--status-healthy);
-  box-shadow: 0 0 8px var(--status-healthy);
+.brand-icon {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  stroke: var(--status-healthy);
 }
 
 .brand-title {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 700;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.8px;
   color: var(--text-primary);
 }
 
-.brand-badge {
+.brand-subtitle {
+  font-size: 11px;
+  color: var(--text-secondary);
+  padding-left: 10px;
+  border-left: 1px solid var(--border-subtle);
+  line-height: 1.2;
+}
+
+.badge-scenario {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--accent-blue);
+  background: rgba(66, 133, 244, 0.15);
+  border: 1px solid rgba(66, 133, 244, 0.35);
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  letter-spacing: 0.5px;
+}
+
+.header-event-title {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  letter-spacing: 0.2px;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+}
+
+.mesh-toggle-group {
+  display: flex;
+  background: rgba(11, 18, 32, 0.75);
+  border: 1px solid var(--border-subtle);
+  border-radius: 5px;
+  padding: 2px;
+  gap: 2px;
+}
+
+.toggle-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
   font-size: 11px;
   font-weight: 600;
-  color: var(--text-secondary);
-  background: rgba(38, 52, 73, 0.6);
-  padding: 2px 8px;
+  font-family: var(--font-ui);
+  padding: 4px 10px;
   border-radius: 4px;
-  letter-spacing: 0.5px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.toggle-btn:hover {
+  color: var(--text-primary);
+}
+
+.toggle-btn.active {
+  background: var(--bg-card);
+  color: #FFFFFF;
+  border: 1px solid var(--border-subtle);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
 }
 
 .legend-bar {
@@ -354,7 +413,7 @@ html, body {
 /* 1. Tactical Legend Card */
 .tactical-legend-card {
   position: absolute;
-  top: 74px;
+  top: 66px;
   left: 16px;
   z-index: 999;
   width: 236px;
@@ -458,7 +517,7 @@ html, body {
 /* 2. Top-Center Alert Banner (Phone network DOWN) */
 .alert-banner {
   position: absolute;
-  top: 74px;
+  top: 66px;
   left: 50%;
   transform: translate(-50%, -10px);
   z-index: 1000;
