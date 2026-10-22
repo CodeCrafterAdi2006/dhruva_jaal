@@ -322,6 +322,15 @@ export class NodeLayer {
             if (aerostatEl) aerostatEl.style.transform = `translateY(-${liftPx}px)`;
             if (tetherEl) tetherEl.style.height = `${liftPx}px`;
 
+            const subEl = element.querySelector('.balloon-sub');
+            if (subEl) subEl.textContent = p < 1 ? `Ascending (${Math.round(p * 100)}m)...` : '100m tethered aerostat';
+          }
+        } else {
+          element.style.display = 'none';
+        }
+      });
+    }
+
     this.latestState = state;
 
     // Refresh active popup if currently open during playback
