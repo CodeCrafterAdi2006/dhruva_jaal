@@ -136,16 +136,17 @@ frontend/
 ---
 
 ### Phase 5: Dynamic Links & 60fps Packet Animation (`src/map/LinkPacketLayer.js`)
-- [ ] **Step 5.1: RSSI-Colored Links with EMA Breathing**
+- [x] **Step 5.1: RSSI-Colored Links with EMA Breathing**
   - Draw links between active nodes colored dynamically by RSSI band (`#2ee66b` green, `#ffb020` amber, `#ff3b3b` red).
   - Apply $\pm 2\text{ dB}$ jitter smoothed via an Exponential Moving Average (EMA) each frame so dBm labels on links and sidebar bars breathe naturally.
   - Style backup/reroute paths and inactive links with dashed lines.
-- [ ] **Step 5.2: Hop-by-Hop Glowing Packet Pulses (`SOS1`–`SOS4`)**
+- [x] **Step 5.2: Hop-by-Hop Glowing Packet Pulses (`SOS1`–`SOS4`)**
   - Render bright white/cyan glowing orbs with comet trails moving along geodesic link segments over `hopSeconds` (`1.2s` per hop), flashing each link and intermediate relay node upon arrival (modeling Store-before-ACK).
   - **SOS 1 (`t=10s`):** `N1 -> N2 -> N3 -> N4 -> N8` (normal ground delivery).
   - **SOS 2 (`t=26s`):** After `N3` fails at `t=22s`, briefly highlight the dashed alternate route and flow `N1 -> N2 -> N5 -> N6 -> N7 -> N8`.
   - **SOS 3 (`t=44s` — Store-and-Forward Showcase):** After `N6` fails at `t=40s`, `N5` creates `SOS3`. Transition to `STORED` and display a pulsing amber ring on `N5` with badge `"STORED IN DONGLE · Waiting for mesh..."`. Hold until `t=62s` (when `DR1`/`DR2` links come online), then automatically transmit `N5 -> DR1 -> DR2 -> N8`.
   - **SOS 4 (`t=86s` — High-Altitude Direct Link):** `N1` transmits directly upward to the 100m balloon backbone: `N1 -> BL1 -> BL2 -> N8`.
+
 
 ---
 

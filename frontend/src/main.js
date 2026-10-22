@@ -2,6 +2,7 @@ import './hud.css';
 import { MapManager } from './map/MapManager.js';
 import { ScenarioEngine } from './engine/ScenarioEngine.js';
 import { NodeLayer } from './map/NodeLayer.js';
+import { LinkPacketLayer } from './map/LinkPacketLayer.js';
 
 // 1. Initialize MapManager (Kathmandu 3D tilted map with flood & safe zones)
 const mapManager = new MapManager('map');
@@ -13,6 +14,10 @@ mapManager.init().then(map => {
   // Phase 4: NodeLayer (Cell Towers, Ground Nodes, Aerial Relays)
   const nodeLayer = new NodeLayer(map);
   nodeLayer.init();
+
+  // Phase 5: LinkPacketLayer (Dynamic Links & 60fps Packet Pulses)
+  const linkPacketLayer = new LinkPacketLayer(map);
+  linkPacketLayer.init();
 
   // Step 3.3: Tactical Compass hook (rotates dial so 'N' points true North)
   const compassDial = document.getElementById('compass-dial');
@@ -44,16 +49,19 @@ mapManager.init().then(map => {
   engine.on('state_update', (state) => {
     updateAlert(state);
     nodeLayer.update(state);
+    linkPacketLayer.update(state);
   });
 
   engine.on('state_reset', (state) => {
     updateAlert(state);
     nodeLayer.update(state);
+    linkPacketLayer.update(state);
   });
 
   engine.init();
 
   window.nodeLayer = nodeLayer;
+  window.linkPacketLayer = linkPacketLayer;
 });
 
 // Expose on window for easy browser console inspection

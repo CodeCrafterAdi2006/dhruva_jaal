@@ -74,19 +74,29 @@ export class MapManager {
         resolve(this.map);
       };
 
-      this.map.on('load', () => {
-        console.log('[MapManager] Kathmandu 3D Map Viewport initialized.');
+      if (this.map.isStyleLoaded()) {
         done();
-      });
+      } else {
+        this.map.once('load', () => {
+          console.log('[MapManager] Kathmandu 3D Map Viewport initialized.');
+          done();
+        });
+      }
 
-      // Safety fallback: If venue Wi-Fi blocks tile requests, resolve anyway with tactical grid
+      // Safety fallback: If venue Wi-Fi blocks tile requests, load local offline canvas
       setTimeout(() => {
         if (!resolved) {
           console.warn('[MapManager] Tile network timeout. Forcing tactical offline fallback.');
           this.enableOfflineFallback();
-          done();
+          // Load blank local style so WebGL layers still function
+          this.map.setStyle({
+            version: 8,
+            sources: {},
+            layers: [{ id: 'bg', type: 'background', paint: { 'background-color': '#0B1220' } }]
+          });
+          this.map.once('styledata', () => done());
         }
-      }, 3000);
+      }, 5000);
     });
   }
 
@@ -94,7 +104,12 @@ export class MapManager {
    * Render Flood Zone Polygon (FZ1) and Safe Ground Circle (SZ1)
    */
   renderZones() {
-    if (!this.map) return;
+    if (!this.map || !this.map.isStyleLoaded()) {
+      this.map?.once('styledata', () => this.renderZones());
+      return;
+    }
+
+    if (this.map.getSource('flood-zone-source')) return; // Already rendered
 
     // 1. Flood Zone Polygon (FZ1 along Bagmati River Basin)
     const floodZone = this.scenario.zones.find(z => z.type === 'flood');
