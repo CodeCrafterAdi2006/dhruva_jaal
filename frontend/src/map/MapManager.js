@@ -59,57 +59,24 @@ export class MapManager {
     this.map.addControl(new ML.ScaleControl({ maxWidth: 120, unit: 'metric' }), 'bottom-left');
 
     this.map.on('error', (e) => {
-      // If tile network fails (venue Wi-Fi loss), activate resilient offline fallback
-      if (e.error && (e.error.status === 404 || e.error.message?.includes('Failed to fetch'))) {
-        this.enableOfflineFallback();
+      // Ignore routine raster tile edge misses
+      if (e.sourceId === 'esri-basemap') return;
+      if (e.error) {
+        console.debug('[MapManager] MapLibre event:', e.error.message || e.error);
       }
     });
 
-    return new Promise((resolve) => {
-      let resolved = false;
-      const done = () => {
-        if (resolved) return;
-        resolved = true;
-        this.renderZones();
-        resolve(this.map);
-      };
-
-      if (this.map.isStyleLoaded()) {
-        done();
-      } else {
-        this.map.once('load', () => {
-          console.log('[MapManager] Kathmandu 3D Map Viewport initialized.');
-          done();
-        });
-      }
-
-      // Safety fallback: If venue Wi-Fi blocks tile requests, load local offline canvas
-      setTimeout(() => {
-        if (!resolved) {
-          console.warn('[MapManager] Tile network timeout. Forcing tactical offline fallback.');
-          this.enableOfflineFallback();
-          // Load blank local style so WebGL layers still function
-          this.map.setStyle({
-            version: 8,
-            sources: {},
-            layers: [{ id: 'bg', type: 'background', paint: { 'background-color': '#0B1220' } }]
-          });
-          this.map.once('styledata', () => done());
-        }
-      }, 5000);
-    });
+    this.renderZones();
+    return Promise.resolve(this.map);
   }
 
   /**
    * Render Flood Zone Polygon (FZ1) and Safe Ground Circle (SZ1)
    */
   renderZones() {
-    if (!this.map || !this.map.isStyleLoaded()) {
-      this.map?.once('styledata', () => this.renderZones());
-      return;
-    }
-
-    if (this.map.getSource('flood-zone-source')) return; // Already rendered
+    if (!this.map) return;
+    try {
+      if (this.map.getSource('flood-zone-source')) return; // Already rendered
 
     // 1. Flood Zone Polygon (FZ1 along Bagmati River Basin)
     const floodZone = this.scenario.zones.find(z => z.type === 'flood');
@@ -186,11 +153,13 @@ export class MapManager {
           'line-color': '#34C759',
           'line-width': 1.5,
           'line-dasharray': [4, 4],
-          'line-opacity': 0.75
         }
       });
     }
+  } catch (e) {
+    setTimeout(() => this.renderZones(), 100);
   }
+}
 
   /**
    * Helper to generate a smooth GeoJSON polygon circle from center and radius in meters
