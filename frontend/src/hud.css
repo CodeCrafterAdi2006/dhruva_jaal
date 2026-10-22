@@ -657,3 +657,155 @@ html, body {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35) !important;
 }
 
+/* ==========================================================================
+   Phase 4: Cell Towers & Node Markers
+   ========================================================================== */
+
+.cell-tower-marker {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  pointer-events: auto;
+  cursor: default;
+  user-select: none;
+  z-index: 10;
+}
+
+.tower-beacon {
+  position: relative;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tower-icon-box {
+  position: relative;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: rgba(14, 23, 38, 0.92);
+  border: 1.5px solid var(--status-healthy);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--status-healthy);
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 0 14px rgba(46, 230, 107, 0.35);
+  z-index: 2;
+}
+
+.tower-svg {
+  width: 15px;
+  height: 15px;
+  stroke: currentColor;
+}
+
+.tower-down-badge {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #EF4444;
+  color: #FFFFFF;
+  font-size: 8px;
+  font-weight: 900;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #0B1220;
+}
+
+/* Concentric Radio Waves (Online State) */
+.tower-wave {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  border-radius: 50%;
+  border: 1.5px solid rgba(46, 230, 107, 0.6);
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(-50%, -50%);
+}
+
+.cell-tower-marker.online .wave-1 {
+  width: 38px;
+  height: 38px;
+  animation: towerPulse 2.2s infinite ease-out;
+}
+
+.cell-tower-marker.online .wave-2 {
+  width: 52px;
+  height: 52px;
+  animation: towerPulse 2.2s infinite ease-out 0.8s;
+}
+
+@keyframes towerPulse {
+  0% {
+    transform: translate(-50%, -50%) scale(0.6);
+    opacity: 0.9;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1.4);
+    opacity: 0;
+  }
+}
+
+/* Offline State (t >= 6s) */
+.cell-tower-marker.offline .tower-icon-box {
+  border-color: #64748B;
+  color: #64748B;
+  background: rgba(15, 23, 42, 0.85);
+  box-shadow: none;
+}
+
+.cell-tower-marker.offline .tower-wave {
+  display: none;
+}
+
+.cell-tower-marker.offline .tower-down-badge {
+  display: flex;
+}
+
+/* Tower Label Info Card */
+.tower-info {
+  margin-top: 4px;
+  background: rgba(14, 23, 38, 0.92);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  padding: 2px 7px;
+  text-align: center;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
+}
+
+.tower-name {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.2;
+}
+
+.tower-status {
+  font-size: 9px;
+  font-family: var(--font-mono);
+  font-weight: 500;
+  line-height: 1.2;
+}
+
+.tower-status.online-text {
+  color: var(--status-healthy);
+}
+
+.tower-status.offline-text {
+  color: #EF4444;
+}
+
+

@@ -1,6 +1,7 @@
 import './hud.css';
 import { MapManager } from './map/MapManager.js';
 import { ScenarioEngine } from './engine/ScenarioEngine.js';
+import { NodeLayer } from './map/NodeLayer.js';
 
 // 1. Initialize MapManager (Kathmandu 3D tilted map with flood & safe zones)
 const mapManager = new MapManager('map');
@@ -9,6 +10,10 @@ const engine = new ScenarioEngine();
 mapManager.init().then(map => {
   console.log('Dhruva Jaal: Map viewport ready.');
   
+  // Phase 4: NodeLayer (Cell Towers, Ground Nodes, Aerial Relays)
+  const nodeLayer = new NodeLayer(map);
+  nodeLayer.init();
+
   // Step 3.3: Tactical Compass hook (rotates dial so 'N' points true North)
   const compassDial = document.getElementById('compass-dial');
   const compassWidget = document.getElementById('compass-widget');
@@ -36,10 +41,19 @@ mapManager.init().then(map => {
     }
   };
 
-  engine.on('state_update', updateAlert);
-  engine.on('state_reset', updateAlert);
+  engine.on('state_update', (state) => {
+    updateAlert(state);
+    nodeLayer.update(state);
+  });
+
+  engine.on('state_reset', (state) => {
+    updateAlert(state);
+    nodeLayer.update(state);
+  });
 
   engine.init();
+
+  window.nodeLayer = nodeLayer;
 });
 
 // Expose on window for easy browser console inspection

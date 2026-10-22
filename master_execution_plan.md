@@ -118,7 +118,7 @@ frontend/
 ---
 
 ### Phase 4: Ground Nodes, Cell Towers & Aerial Relays (`src/map/NodeLayer.js`)
-- [ ] **Step 4.1: Render Cell Towers (`T1`–`T3`)**
+- [x] **Step 4.1: Render Cell Towers (`T1`–`T3`)**
   - Show 3 cell tower icons with green signal arcs from `t=0` to `t=6s`.
   - At `t=6s`, switch icons to gray with a red `✕` badge and label `"Cell Tower (Kathmandu)"`.
 - [ ] **Step 4.2: Render Ground Nodes (`N1`–`N8`)**
