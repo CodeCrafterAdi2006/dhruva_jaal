@@ -126,7 +126,7 @@ frontend/
   - `N2`–`N7` (`RELAY`): Glowing blue core with concentric translucent radar rings, label `"RELAY"` and live `-XX dBm` readout underneath.
   - `N8` (`BASE CAMP`): Glowing neon green core with tent/HQ icon, label `"BASE CAMP"` and `"Safe ground"`.
   - **Node Down State (`N3` at `t=22s`, `N6` at `t=40s`):** Transition node to muted slate-gray with a warning triangle `⚠`, label `"NODE DOWN"`, and gray out connected links.
-- [ ] **Step 4.3: Render Drones (`DR1`, `DR2`) & Tethered Balloons (`BL1`, `BL2`)**
+- [x] **Step 4.3: Render Drones (`DR1`, `DR2`) & Tethered Balloons (`BL1`, `BL2`)**
   - **Drones (`t=54s`):** Launch from `N8` (Safe Ground), animate along smooth flight paths to `DR1`/`DR2` coordinates over `6s` with a faint dashed flight trail, spinning quadcopter SVG, ground shadow dot, and `"DRONE 1 · 80 m"` tag.
   - **Balloons (`t=66s`):** Inflate and rise vertically from safe-ground anchor points (`BL1`, `BL2`) over `8s`. Draw a vertical tether line connecting the ground anchor dot to the glowing cyan-white teardrop aerostat icon, with gentle horizontal sway and label `"BALLOON 1 · 100 m tethered"`.
   - **Make-Before-Break Handoff & Recall (`t=74s`–`t=83s`):** Bring balloon links online at `t=74s`, display `"Link handoff: no coverage gap"`, show `"battery low (illustrative)"` on drones, and fly `DR1`/`DR2` back to `N8` at `t=78s`.

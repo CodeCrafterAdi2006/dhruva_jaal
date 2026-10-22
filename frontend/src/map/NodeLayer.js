@@ -13,6 +13,7 @@ export class NodeLayer {
   init() {
     this.renderCellTowers();
     this.renderGroundNodes();
+    this.renderAerialNodes();
   }
 
   /**
@@ -62,7 +63,6 @@ export class NodeLayer {
     const ML = getMapLibre();
     if (!ML || !this.map) return;
 
-    // Default baseline RSSI map for labels
     const defaultRssi = {
       N1: -68, N2: -72, N3: -78, N4: -87,
       N5: -82, N6: -76, N7: -70, N8: -69
@@ -75,7 +75,6 @@ export class NodeLayer {
       el.className = `mesh-node-marker role-${node.role} online`;
       el.id = `node-marker-${node.id}`;
 
-      // Choose icon symbol based on role
       let iconHtml = '';
       if (node.role === 'dongle') {
         iconHtml = `<svg class="node-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`;
@@ -118,6 +117,80 @@ export class NodeLayer {
   }
 
   /**
+   * Step 4.3: Render Aerial Relays (Drones DR1, DR2 & Tethered Balloons BL1, BL2)
+   */
+  renderAerialNodes() {
+    const ML = getMapLibre();
+    if (!ML || !this.map) return;
+
+    this.aerialMarkers = new Map();
+    const baseCamp = this.scenario.nodes.find(n => n.id === 'N8');
+    const baseCampPos = [baseCamp.lon, baseCamp.lat];
+
+    const aerialNodes = this.scenario.nodes.filter(n => n.role === 'drone' || n.role === 'balloon');
+
+    aerialNodes.forEach(node => {
+      const el = document.createElement('div');
+      el.className = `aerial-marker role-${node.role}`;
+      el.id = `aerial-marker-${node.id}`;
+      el.style.display = 'none'; // Hidden until launched
+
+      if (node.role === 'drone') {
+        el.innerHTML = `
+          <div class="drone-marker-inner">
+            <div class="drone-rotor rotor-tl"></div>
+            <div class="drone-rotor rotor-tr"></div>
+            <div class="drone-rotor rotor-bl"></div>
+            <div class="drone-rotor rotor-br"></div>
+            <svg class="drone-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 2v20M2 12h20M7 7l10 10M17 7L7 17"/>
+              <circle cx="12" cy="12" r="3.5" fill="#ffb020"/>
+            </svg>
+          </div>
+          <div class="drone-shadow"></div>
+          <div class="node-tag drone-tag">
+            <div class="node-label drone-name">${node.label} · 80m</div>
+            <div class="node-sub drone-sub">Agile aerial relay</div>
+          </div>
+        `;
+      } else {
+        // Tethered Balloon
+        el.innerHTML = `
+          <div class="balloon-container">
+            <div class="balloon-aerostat">
+              <svg class="balloon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                <path d="M12 2a7 7 0 0 0-7 7c0 4.5 5 10 7 11 2-1 7-6.5 7-11a7 7 0 0 0-7-7z" fill="rgba(0, 229, 255, 0.25)"/>
+                <circle cx="12" cy="9" r="2.5" fill="#00e5ff"/>
+              </svg>
+            </div>
+            <div class="balloon-tether"></div>
+            <div class="balloon-ground-anchor"></div>
+          </div>
+          <div class="node-tag balloon-tag">
+            <div class="node-label balloon-name">${node.label} · 100m</div>
+            <div class="node-sub balloon-sub">Tethered aerostat</div>
+          </div>
+        `;
+      }
+
+      const marker = new ML.Marker({
+        element: el,
+        anchor: 'center'
+      })
+        .setLngLat([node.lon, node.lat])
+        .addTo(this.map);
+
+      this.aerialMarkers.set(node.id, {
+        marker,
+        element: el,
+        data: node,
+        basePos: baseCampPos,
+        targetPos: [node.lon, node.lat]
+      });
+    });
+  }
+
+  /**
    * Synchronize tower and node visual states with ScenarioEngine tick snapshot
    */
   update(state) {
@@ -149,7 +222,7 @@ export class NodeLayer {
       }
     });
 
-    // 2. Update Ground Nodes (N1 - N8)
+    // 2. Update Ground Nodes (N1 - N8) & Store-and-Forward on N5
     if (state.nodes) {
       state.nodes.forEach(nodeState => {
         const markerObj = this.nodeMarkers.get(nodeState.id);
@@ -158,29 +231,85 @@ export class NodeLayer {
         const { element, data } = markerObj;
         const isOnline = nodeState.status === 'online';
 
-        if (isOnline) {
-          if (!element.classList.contains('online')) {
-            element.classList.remove('down');
-            element.classList.add('online');
-            const sub = element.querySelector('.node-sub');
-            if (sub) {
-              const defaultRssi = { N1: -68, N2: -72, N3: -78, N4: -87, N5: -82, N6: -76, N7: -70, N8: -69 };
-              const rssi = defaultRssi[data.id] || -75;
-              sub.textContent = data.role === 'helper' ? 'Safe ground' : `${rssi} dBm`;
-            }
+        // Check if this node is currently holding an SOS packet in Store-and-Forward
+        const isHoldingSos = state.sosStates?.some(
+          s => s.from === nodeState.id && s.state === 'STORED'
+        );
+
+        const labelEl = element.querySelector('.node-label');
+        const subEl = element.querySelector('.node-sub');
+
+        if (isHoldingSos) {
+          element.classList.remove('down');
+          element.classList.add('online', 'waiting-for-mesh');
+          if (labelEl) labelEl.textContent = `${nodeState.id} · STORED`;
+          if (subEl) subEl.innerHTML = `<span class="stored-text">Waiting for mesh...</span>`;
+        } else if (isOnline) {
+          element.classList.remove('down', 'waiting-for-mesh');
+          element.classList.add('online');
+          if (labelEl) {
+            labelEl.textContent = data.role === 'dongle' ? 'DONGLE' : (data.role === 'helper' ? 'BASE CAMP' : data.id);
+          }
+          if (subEl) {
+            const defaultRssi = { N1: -68, N2: -72, N3: -78, N4: -87, N5: -82, N6: -76, N7: -70, N8: -69 };
+            const rssi = defaultRssi[data.id] || -75;
+            subEl.textContent = data.role === 'helper' ? 'Safe ground' : `${rssi} dBm`;
           }
         } else {
-          if (!element.classList.contains('down')) {
-            element.classList.remove('online');
-            element.classList.add('down');
-            const sub = element.querySelector('.node-sub');
-            if (sub) {
-              sub.innerHTML = `<span class="down-text">⚠ DOWN</span>`;
+          // Node Down State (N3 at t=22s, N6 at t=40s, or manual kill)
+          element.classList.remove('online', 'waiting-for-mesh');
+          element.classList.add('down');
+          if (labelEl) labelEl.textContent = 'NODE DOWN';
+          if (subEl) subEl.innerHTML = `<span class="down-text">⚠ Flooded</span>`;
+        }
+      });
+    }
+
+    // 3. Update Aerial Relays (DR1, DR2 Drones & BL1, BL2 Balloons)
+    if (this.aerialMarkers && state.nodes) {
+      this.aerialMarkers.forEach((markerObj, id) => {
+        const nodeState = state.nodes.find(n => n.id === id);
+        if (!nodeState) return;
+
+        const { marker, element, data, basePos, targetPos } = markerObj;
+        const isVisible = nodeState.visible && nodeState.flightProgress > 0;
+
+        if (isVisible) {
+          element.style.display = 'flex';
+          const p = nodeState.flightProgress;
+
+          if (data.role === 'drone') {
+            // Smooth geographic arc from Base Camp N8 to target station
+            const curLon = basePos[0] + p * (targetPos[0] - basePos[0]);
+            const curLat = basePos[1] + p * (targetPos[1] - basePos[1]);
+            marker.setLngLat([curLon, curLat]);
+
+            const subEl = element.querySelector('.drone-sub');
+            if (nodeState.batteryStatus && nodeState.batteryStatus.includes('LOW')) {
+              element.classList.add('battery-low');
+              if (subEl) subEl.textContent = '⚠ Low battery · Returning';
+            } else {
+              element.classList.remove('battery-low');
+              if (subEl) subEl.textContent = p < 1 ? 'Deploying to station...' : 'Agile aerial relay';
             }
+          } else if (data.role === 'balloon') {
+            // Tethered balloon rises vertically over target anchor
+            marker.setLngLat(targetPos);
+            const aerostatEl = element.querySelector('.balloon-aerostat');
+            const tetherEl = element.querySelector('.balloon-tether');
+            const liftPx = Math.round(p * 46); // 0 to 46px lift
+            if (aerostatEl) aerostatEl.style.transform = `translateY(-${liftPx}px)`;
+            if (tetherEl) tetherEl.style.height = `${liftPx}px`;
+
+            const subEl = element.querySelector('.balloon-sub');
+            if (subEl) subEl.textContent = p < 1 ? `Ascending (${Math.round(p * 100)}m)...` : '100m tethered aerostat';
           }
+        } else {
+          element.style.display = 'none';
         }
       });
     }
   }
 }
+
 

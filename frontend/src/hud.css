@@ -997,9 +997,185 @@ html, body {
 }
 
 .node-sub .down-text {
-  color: #F5B942;
+  color: #EF4444;
   font-weight: 700;
 }
+
+/* Store-and-Forward Waiting State on N5 (t=44s to t=62s) */
+.mesh-node-marker.waiting-for-mesh .node-core {
+  background: rgba(245, 185, 66, 0.28) !important;
+  border-color: #F5B942 !important;
+  color: #F5B942 !important;
+  box-shadow: 0 0 20px rgba(245, 185, 66, 0.75) !important;
+}
+
+.mesh-node-marker.waiting-for-mesh .node-wave {
+  display: block !important;
+  border-color: rgba(245, 185, 66, 0.75) !important;
+  animation: nodePulse 1.4s infinite ease-out !important;
+}
+
+.mesh-node-marker.waiting-for-mesh .node-label {
+  color: #FBBF24 !important;
+  font-weight: 800;
+}
+
+.mesh-node-marker.waiting-for-mesh .stored-text {
+  color: #FDE68A !important;
+  font-weight: 700;
+  animation: storedBlink 1.5s infinite ease-in-out;
+}
+
+@keyframes storedBlink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+
+/* Node Down Primary Label Styling */
+.mesh-node-marker.down .node-label {
+  color: #EF4444 !important;
+  font-weight: 800;
+}
+
+/* ==========================================================================
+   Step 4.3: Aerial Relays (Drones & Tethered Balloons)
+   ========================================================================== */
+
+.aerial-marker {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  pointer-events: auto;
+  cursor: pointer;
+  user-select: none;
+  z-index: 25;
+}
+
+/* 1. Drone Marker (Agile Quadcopter) */
+.drone-marker-inner {
+  position: relative;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(14, 23, 38, 0.92);
+  border: 1.5px solid #FFB020;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #FFB020;
+  box-shadow: 0 0 16px rgba(255, 176, 32, 0.55);
+  transition: all 0.3s ease;
+}
+
+.drone-svg {
+  width: 16px;
+  height: 16px;
+  stroke: currentColor;
+}
+
+.drone-rotor {
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 1.5px dashed rgba(255, 176, 32, 0.85);
+  animation: rotorSpin 0.25s infinite linear;
+}
+
+.rotor-tl { top: -2px; left: -2px; }
+.rotor-tr { top: -2px; right: -2px; }
+.rotor-bl { bottom: -2px; left: -2px; }
+.rotor-br { bottom: -2px; right: -2px; }
+
+@keyframes rotorSpin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.drone-shadow {
+  width: 10px;
+  height: 4px;
+  background: rgba(0, 0, 0, 0.45);
+  border-radius: 50%;
+  margin-top: 2px;
+  filter: blur(1px);
+}
+
+.drone-tag .drone-name {
+  color: #FFB020 !important;
+}
+
+.aerial-marker.battery-low .drone-marker-inner {
+  border-color: #EF4444;
+  color: #EF4444;
+  box-shadow: 0 0 18px rgba(239, 68, 68, 0.7);
+  animation: batteryBlink 0.8s infinite ease-in-out;
+}
+
+@keyframes batteryBlink {
+  0%, 100% { border-color: #EF4444; box-shadow: 0 0 18px rgba(239, 68, 68, 0.8); }
+  50% { border-color: #F5B942; box-shadow: 0 0 8px rgba(245, 185, 66, 0.4); }
+}
+
+/* 2. Tethered Aerostat Balloon */
+.balloon-container {
+  position: relative;
+  width: 32px;
+  height: 60px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.balloon-aerostat {
+  position: absolute;
+  top: 0;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #00E5FF;
+  filter: drop-shadow(0 0 10px rgba(0, 229, 255, 0.65));
+  animation: balloonSway 3.2s infinite ease-in-out;
+  transition: transform 0.1s linear;
+}
+
+@keyframes balloonSway {
+  0%, 100% { transform: translate(0, 0) rotate(0deg); }
+  50% { transform: translate(2px, -1px) rotate(2deg); }
+}
+
+.balloon-svg {
+  width: 24px;
+  height: 24px;
+  stroke: currentColor;
+}
+
+.balloon-tether {
+  position: absolute;
+  bottom: 4px;
+  width: 1.5px;
+  height: 0px;
+  background: repeating-linear-gradient(to bottom, #00E5FF 0, #00E5FF 3px, transparent 3px, transparent 6px);
+  transition: height 0.1s linear;
+}
+
+.balloon-ground-anchor {
+  position: absolute;
+  bottom: 0;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #00E5FF;
+  box-shadow: 0 0 8px #00E5FF;
+}
+
+.balloon-tag .balloon-name {
+  color: #00E5FF !important;
+}
+
 
 
 
