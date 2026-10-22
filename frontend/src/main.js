@@ -58,7 +58,61 @@ mapManager.init().then(map => {
     linkPacketLayer.update(state);
   });
 
+  // Step 7.2: With Mesh / Without Mesh header toggles
+  const btnWithMesh = document.getElementById('btn-with-mesh');
+  const btnWithoutMesh = document.getElementById('btn-without-mesh');
+  if (btnWithMesh && btnWithoutMesh) {
+    btnWithMesh.addEventListener('click', () => {
+      btnWithMesh.classList.add('active');
+      btnWithoutMesh.classList.remove('active');
+      engine.setWithMesh(true);
+    });
+    btnWithoutMesh.addEventListener('click', () => {
+      btnWithoutMesh.classList.add('active');
+      btnWithMesh.classList.remove('active');
+      engine.setWithMesh(false);
+    });
+  }
+
+  // Step 7.1: Simulate Disaster & Reset Network buttons
+  const btnSimulate = document.getElementById('btn-simulate');
+  if (btnSimulate) {
+    btnSimulate.addEventListener('click', () => {
+      const killed = engine.killNextNode();
+      console.log('Simulate Disaster: manual kill ->', killed);
+    });
+  }
+
+  const btnReset = document.getElementById('btn-reset');
+  if (btnReset) {
+    btnReset.addEventListener('click', () => {
+      engine.restart();
+    });
+  }
+
+  // Step 7.4: Keyboard shortcuts (Space = Play/Pause, K = Kill node, R = Restart)
+  window.addEventListener('keydown', (e) => {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+    if (e.code === 'Space') {
+      e.preventDefault();
+      if (engine.isPlaying) engine.pause();
+      else engine.play();
+    } else if (e.key === 'k' || e.key === 'K') {
+      engine.killNextNode();
+    } else if (e.key === 'r' || e.key === 'R') {
+      engine.restart();
+    }
+  });
+
   engine.init();
+
+  // Auto-play the scenario after 1.5 seconds so judges immediately see live packet flow
+  setTimeout(() => {
+    if (!engine.isPlaying) {
+      engine.play();
+      console.log('Dhruva Jaal: Scenario playback auto-started.');
+    }
+  }, 1500);
 
   window.nodeLayer = nodeLayer;
   window.linkPacketLayer = linkPacketLayer;

@@ -26,11 +26,12 @@ export class LinkPacketLayer {
       data: { type: 'FeatureCollection', features: [] }
     });
 
-    // Outer link glow layer (translucent bloom)
+    // Outer link glow layer (translucent bloom for active links)
     this.map.addLayer({
       id: 'mesh-links-glow',
       type: 'line',
       source: this.linksSourceId,
+      filter: ['==', ['get', 'active'], true],
       paint: {
         'line-color': ['get', 'color'],
         'line-width': ['get', 'glowWidth'],
@@ -39,16 +40,30 @@ export class LinkPacketLayer {
       }
     });
 
-    // Inner core link line
+    // Active link core line (solid bright line)
     this.map.addLayer({
       id: 'mesh-links-core',
       type: 'line',
       source: this.linksSourceId,
+      filter: ['==', ['get', 'active'], true],
       paint: {
         'line-color': ['get', 'color'],
         'line-width': ['get', 'coreWidth'],
-        'line-opacity': ['get', 'opacity'],
-        'line-dasharray': ['case', ['get', 'active'], ['literal', [1, 0]], ['literal', [2, 2]]]
+        'line-opacity': ['get', 'opacity']
+      }
+    });
+
+    // Inactive / alternate route link line (dashed slate)
+    this.map.addLayer({
+      id: 'mesh-links-inactive',
+      type: 'line',
+      source: this.linksSourceId,
+      filter: ['==', ['get', 'active'], false],
+      paint: {
+        'line-color': '#64748B',
+        'line-width': 1.4,
+        'line-opacity': 0.35,
+        'line-dasharray': [2, 2]
       }
     });
 
@@ -83,6 +98,12 @@ export class LinkPacketLayer {
         'circle-stroke-color': '#00E5FF'
       }
     });
+
+    // Immediately render initial links so they appear on screen without waiting
+    const state = this.lastState || (window.engine ? window.engine.reconstructStateAt(window.engine.currentTime || 0) : null);
+    if (state) {
+      this.update(state);
+    }
   }
 
   /**
@@ -111,7 +132,9 @@ export class LinkPacketLayer {
    * Update link lines and packet positions on every animation frame
    */
   update(state) {
-    if (!this.map || !state) return;
+    if (!state) return;
+    this.lastState = state;
+    if (!this.map) return;
 
     const linksSource = this.map.getSource(this.linksSourceId);
     const packetsSource = this.map.getSource(this.packetsSourceId);
@@ -129,8 +152,13 @@ export class LinkPacketLayer {
       const nodeAState = state.nodes?.find(n => n.id === edge.a);
       const nodeBState = state.nodes?.find(n => n.id === edge.b);
 
-      const aOnline = nodeAState ? (nodeAState.status === 'online' && nodeAState.visible !== false && (nodeAState.flightProgress === undefined || nodeAState.flightProgress >= 1)) : true;
-      const bOnline = nodeBState ? (nodeBState.status === 'online' && nodeBState.visible !== false && (nodeBState.flightProgress === undefined || nodeBState.flightProgress >= 1)) : true;
+      // If either endpoint is an invisible / unlaunched node (e.g. drone or balloon before launch), do not draw the edge
+      const aVisible = nodeAState ? nodeAState.visible !== false : true;
+      const bVisible = nodeBState ? nodeBState.visible !== false : true;
+      if (!aVisible || !bVisible) return;
+
+      const aOnline = nodeAState ? (nodeAState.status === 'online' && (nodeAState.flightProgress === undefined || nodeAState.flightProgress >= 1)) : true;
+      const bOnline = nodeBState ? (nodeBState.status === 'online' && (nodeBState.flightProgress === undefined || nodeBState.flightProgress >= 1)) : true;
 
       // Link is active only if withMesh is ON and both endpoints are operational and stationed
       const isActive = withMesh && aOnline && bOnline;
