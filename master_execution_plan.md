@@ -150,32 +150,32 @@ frontend/
 
 ---
 
-### Phase 6: Right-Hand Telemetry Sidebar & Base Camp Inbox (`src/ui/RightPanels.js`)
-- [ ] **Step 6.1: Card 1 — `Message Log`**
+### Phase 6: Right-Hand Telemetry Sidebar & Base Camp Inbox (`src/ui/Inbox.js` & `main.js`)
+- [x] **Step 6.1: Card 1 — `Message Log`**
   - Columns: `TIME (IST)`, `ID`, `STATUS`, `FROM -> TO`, `ROUTE`.
   - Color-coded status badges (`QUEUED`, `STORED`, `TRANSMITTING`, `SENT_TO_MESH`, `DELIVERED`, `FAILED`).
-- [ ] **Step 6.2: Card 2 — `RSSI (Live)`**
+- [x] **Step 6.2: Card 2 — `RSSI (Live)`**
   - Per-node horizontal signal bars (`Node 1 (DONGLE)` through `Node 8`, plus active `DR1`/`DR2`/`BL1`/`BL2`) with live dBm number, colored progress bar, and `● Online` / `⚠ Offline` indicator.
-- [ ] **Step 6.3: Card 3 — `Network Stats`**
+- [x] **Step 6.3: Card 3 — `Network Stats`**
   - 2-column tactical grid matching the mockup:
     - Left: `Hop Count` (of last message), `Packet Success Rate` (`%`), `Avg. RSSI` (`-XX dBm`).
     - Right: `Total Nodes`, `Active Nodes`, `Down Nodes`, `Aerial Relays` (live count of active drones + balloons).
-- [ ] **Step 6.4: Card 4 — `Base Camp Inbox`**
+- [x] **Step 6.4: Card 4 — `Base Camp Inbox`**
   - Columns: `ID`, `TIME (IST)`, `GPS (LAT, LON)`, `PEOPLE`, `NEED` (colored pill: Red `MEDICAL`, Amber `RESCUE`, Blue `FOOD`), `BATTERY` (red/orange `%`), `HOPS`, `STATUS`.
   - New SOS deliveries slide in with a neon highlight. Clicking any row smoothly pans/zooms the map to that survivor's coordinates and pulses their marker.
 
 ---
 
-### Phase 7: Timeline Bar, Mode Toggles, Context Modal & Polish (`src/ui/`)
-- [ ] **Step 7.1: Bottom Timeline & Controls (`TimelineBar.js`)**
-  - Play/Pause circular neon button, draggable timeline slider (`0s`–`100s`) with labeled phase dots (`P1` to `P5`), simulated clock (`🕒 Sat 28 Sep, 04:05`), speed selector (`0.5x`, `1x`, `2x`), and `Aerial layer: ...` status dropdown/chip.
+### Phase 7: Timeline Bar, Mode Toggles, Context Modal & Polish (`src/ui/Modals.js` & `main.js`)
+- [x] **Step 7.1: Bottom Timeline & Controls (`TimelineBar.js` / `main.js`)**
+  - Play/Pause circular neon button, draggable timeline slider (`0s`–`100s`) with labeled phase dots (`P1` to `P5`), simulated clock (`🕒 Sat 28 Sep, 04:05`), speed selector (`0.5x`, `1x`, `2x`), and direct phase-click navigation.
   - Action buttons on bottom-right: `[▶ Play Scenario]` and `[⚠ Simulate Disaster]` (manual node-kill trigger for live judge Q&A).
-- [ ] **Step 7.2: `With mesh | Without mesh` Header Toggle**
+- [x] **Step 7.2: `With mesh | Without mesh` Header Toggle**
   - **With mesh:** Full scenario plays; 4 SOS messages delivered; aerial relays deploy.
   - **Without mesh:** At `t=6s` cell towers go offline; mesh links and aerial relays remain hidden; SOS attempts at `t=10, 26, 44, 86` immediately fail with `"NO ROUTE — Phone network down"`; Base Camp Inbox remains empty (`0 delivered`).
-- [ ] **Step 7.3: Context Modal, End-of-Run Summary Card & Honesty Footer (`Modals.js`)**
+- [x] **Step 7.3: Context Modal, End-of-Run Summary Card & Honesty Footer (`Modals.js`)**
   - Collapsible `"Context & Response Plan"` drawer containing the 5 verified September 2024 Kathmandu flood fact cards (with AP, Reuters, ACAPS, Kantipur, and Nepal Telecom citations) + the 3-row `"Our Response Plan"` card (Drones vs. Balloons vs. Together).
   - At `t=96s`, display the comparison Summary Modal: `"With Mesh: 4 SOS Delivered, 2 Node Failures Survived, 2 Drones & 2 Balloons Deployed from Safe Ground"` vs. `"Without Mesh: 0 Delivered"`.
   - Permanent footer disclaimer: *"Simulation. Scripted scenario based on public reports of the September 2024 Kathmandu floods. Device positions, flood zone and message times are illustrative, not measured."*
-- [ ] **Step 7.4: Keyboard Shortcuts (`main.js`)**
-  - `Space` = Play/Pause, `R` = Restart, `K` = Kill next ground node (`Simulate Disaster`), `D` = Launch drones now, `B` = Raise balloons now, `M` = Toggle With/Without Mesh, `F` = Toggle Fullscreen.
+- [x] **Step 7.4: Keyboard Shortcuts (`main.js`)**
+  - `Space` = Play/Pause, `R` = Restart, `K` = Kill next ground node (`Simulate Disaster`), `D` = Jump to Drones launch ($t=54\text{s}$), `B` = Jump to Balloons rise ($t=66\text{s}$), `M` = Toggle With/Without Mesh, `F` = Toggle Fullscreen, `C`/`I` = Toggle Context Modal.

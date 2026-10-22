@@ -3,6 +3,8 @@ import { MapManager }      from './map/MapManager.js';
 import { ScenarioEngine }  from './engine/ScenarioEngine.js';
 import { NodeLayer }       from './map/NodeLayer.js';
 import { LinkPacketLayer } from './map/LinkPacketLayer.js';
+import { BaseCampInbox }   from './ui/Inbox.js';
+import { ModalsManager }   from './ui/Modals.js';
 
 // ─── Engine & Map ──────────────────────────────────────────────────────────────
 const mapManager = new MapManager('map');
@@ -12,18 +14,28 @@ window.mapManager = mapManager;
 window.engine     = engine;
 
 mapManager.init().then(map => {
-  console.log('[Dhruva Jaal] Map ready.');
+  console.log('[Dhruva Jaal] Map engine ready.');
 
-  // Phase 4: markers
+  // Phase 4: Ground, Tower & Aerial Markers
   const nodeLayer = new NodeLayer(map);
   nodeLayer.init();
 
-  // Phase 5: links & packets
+  // Phase 5: Dynamic 60fps Links & SOS Pulses
   const linkPacketLayer = new LinkPacketLayer(map);
   linkPacketLayer.init();
 
+  // Phase 6: Base Camp Inbox (HQ Message Dispatch)
+  const inbox = new BaseCampInbox(map, nodeLayer);
+  inbox.init();
+
+  // Phase 7: Context & Response Plan Modal + Mission Summary Overlay + Honesty Footer
+  const modals = new ModalsManager(engine, map);
+  modals.init();
+
   window.nodeLayer       = nodeLayer;
   window.linkPacketLayer = linkPacketLayer;
+  window.inbox           = inbox;
+  window.modals          = modals;
 
   // ─── Compass ────────────────────────────────────────────────────────────────
   const compassDial   = document.getElementById('compass-dial');
@@ -58,13 +70,12 @@ mapManager.init().then(map => {
   };
 
   const rssiToWidth = (dbm) => {
-    const pct = Math.max(5, Math.min(100, Math.round(((dbm + 120) / 60) * 100)));
-    return pct;
+    return Math.max(5, Math.min(100, Math.round(((dbm + 120) / 60) * 100)));
   };
   const rssiToClass = (dbm) => dbm >= -80 ? 'strong' : dbm >= -100 ? 'medium' : 'weak';
 
   function updateSidebar(state) {
-    // ── Message Log
+    // ── 1. Message Log
     if (logFeed && state.sosStates) {
       state.sosStates.forEach(sos => {
         const key = `${sos.id}-${sos.state}`;
@@ -91,19 +102,17 @@ mapManager.init().then(map => {
           <div class="log-detail">${sos.id} · From ${sos.from} → ${sos.path?.[sos.path.length-1] || 'N8'}</div>
         `;
         logFeed.prepend(item);
-        // Keep max 8 rows
         while (logFeed.children.length > 8) logFeed.removeChild(logFeed.lastChild);
       });
     }
 
-    // ── RSSI Node Bars
+    // ── 2. RSSI Node Bars
     if (nodesList && state.nodes) {
       nodesList.innerHTML = '';
       const groundNodes = state.nodes.filter(n =>
         ['dongle','relay','helper'].includes(n.role) &&
         !['DR1','DR2','BL1','BL2'].includes(n.id)
       );
-      // also add any deployed aerials
       const aerials = state.nodes.filter(n =>
         (n.role === 'drone' || n.role === 'balloon') && n.visible
       );
@@ -129,10 +138,9 @@ mapManager.init().then(map => {
       });
     }
 
-    // ── Network Stats
+    // ── 3. Network Stats
     const onlineCount  = state.nodes?.filter(n => n.status === 'online' && n.visible !== false).length ?? 0;
     const totalCount   = state.nodes?.filter(n => n.visible !== false).length ?? 0;
-    const deliveredCnt = state.deliveredSos?.length ?? 0;
     const lastSos      = state.sosStates?.filter(s => s.state === 'DELIVERED').slice(-1)[0];
 
     const el = (id) => document.getElementById(id);
@@ -148,6 +156,7 @@ mapManager.init().then(map => {
     nodeLayer.update(state);
     linkPacketLayer.update(state);
     updateSidebar(state);
+    inbox.update(state);
     updateTimeline(state);
   });
 
@@ -158,30 +167,31 @@ mapManager.init().then(map => {
     seenSos.clear();
     if (logFeed) logFeed.innerHTML = '';
     updateSidebar(state);
+    inbox.reset();
     updateTimeline(state);
   });
 
   // ─── With / Without Mesh Toggle ────────────────────────────────────────────
   const btnWith    = document.getElementById('btn-with-mesh');
   const btnWithout = document.getElementById('btn-without-mesh');
+
+  function setMeshMode(withMesh) {
+    if (btnWith && btnWithout) {
+      btnWith.classList.toggle('active', withMesh);
+      btnWithout.classList.toggle('active', !withMesh);
+    }
+    engine.setWithMesh(withMesh);
+  }
+
   if (btnWith && btnWithout) {
-    btnWith.addEventListener('click', () => {
-      btnWith.classList.add('active');
-      btnWithout.classList.remove('active');
-      engine.setWithMesh(true);
-    });
-    btnWithout.addEventListener('click', () => {
-      btnWithout.classList.add('active');
-      btnWith.classList.remove('active');
-      engine.setWithMesh(false);
-    });
+    btnWith.addEventListener('click', () => setMeshMode(true));
+    btnWithout.addEventListener('click', () => setMeshMode(false));
   }
 
   // ─── Sidebar Action Buttons ────────────────────────────────────────────────
   document.getElementById('btn-simulate')?.addEventListener('click', () => engine.killNextNode());
   document.getElementById('btn-reset')?.addEventListener('click', () => {
     engine.restart();
-    // After restart, keep paused so user can control
     engine.pause();
     updatePlayBtn();
   });
@@ -232,9 +242,23 @@ mapManager.init().then(map => {
     });
   });
 
-  // ─── Keyboard Shortcuts ────────────────────────────────────────────────────
+  // ─── Phase Dots Direct Navigation ──────────────────────────────────────────
+  const phaseTimes = { P1: 0, P2: 6, P3: 54, P4: 66, P5: 78 };
+  document.querySelectorAll('.tl-phase-dot').forEach(dot => {
+    dot.style.cursor = 'pointer';
+    dot.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const p = dot.textContent.trim();
+      if (phaseTimes[p] !== undefined) {
+        engine.seek(phaseTimes[p]);
+      }
+    });
+  });
+
+  // ─── Keyboard Shortcuts (Step 7.4) ────────────────────────────────────────
   window.addEventListener('keydown', (e) => {
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
     if (e.code === 'Space') {
       e.preventDefault();
       if (engine.isPlaying) engine.pause(); else engine.play();
@@ -242,12 +266,41 @@ mapManager.init().then(map => {
     } else if (e.key === 'k' || e.key === 'K') {
       engine.killNextNode();
     } else if (e.key === 'r' || e.key === 'R') {
-      engine.restart(); engine.pause(); updatePlayBtn();
+      engine.restart();
+      engine.pause();
+      updatePlayBtn();
+    } else if (e.key === 'd' || e.key === 'D') {
+      // Jump to Drones launch (t=54s)
+      engine.seek(54);
+      engine.play();
+      updatePlayBtn();
+    } else if (e.key === 'b' || e.key === 'B') {
+      // Jump to Balloons rise (t=66s)
+      engine.seek(66);
+      engine.play();
+      updatePlayBtn();
+    } else if (e.key === 'm' || e.key === 'M') {
+      // Toggle With/Without Mesh
+      setMeshMode(!engine.withMesh);
+    } else if (e.key === 'f' || e.key === 'F') {
+      // Toggle Fullscreen
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(() => {});
+      } else {
+        document.exitFullscreen().catch(() => {});
+      }
+    } else if (e.key === 'c' || e.key === 'C' || e.key === 'i' || e.key === 'I') {
+      // Toggle Context & Response Plan Modal
+      if (modals.contextModal && !modals.contextModal.classList.contains('hidden')) {
+        modals.hideContextModal();
+      } else {
+        modals.showContextModal();
+      }
     }
   });
 
   // ─── Boot ─────────────────────────────────────────────────────────────────
-  engine.init();   // seek(0) → emits state_reset
+  engine.init(); // seek(0) → emits state_reset
   // Start PAUSED — user or demo-runner presses Play
   updatePlayBtn();
 
@@ -267,11 +320,11 @@ function injectTimelineBar() {
     </div>
     <div class="tl-center">
       <div class="tl-phase-dots">
-        <span class="tl-phase-dot" style="left:0%"    title="P1: Rain begins">P1</span>
-        <span class="tl-phase-dot" style="left:6%"    title="P2: Towers DOWN">P2</span>
-        <span class="tl-phase-dot" style="left:54%"   title="P3: Drones launch">P3</span>
-        <span class="tl-phase-dot" style="left:66%"   title="P4: Balloons rise">P4</span>
-        <span class="tl-phase-dot" style="left:78%"   title="P5: Handoff complete">P5</span>
+        <span class="tl-phase-dot" style="left:0%"    title="P1: Rain begins (t=0s)">P1</span>
+        <span class="tl-phase-dot" style="left:6%"    title="P2: Cell Towers DOWN (t=6s)">P2</span>
+        <span class="tl-phase-dot" style="left:54%"   title="P3: Drones launch (t=54s)">P3</span>
+        <span class="tl-phase-dot" style="left:66%"   title="P4: Balloons rise (t=66s)">P4</span>
+        <span class="tl-phase-dot" style="left:78%"   title="P5: Handoff complete (t=78s)">P5</span>
       </div>
       <input type="range" id="tl-slider" class="tl-slider" min="0" max="1000" value="0" step="1">
     </div>
@@ -282,7 +335,6 @@ function injectTimelineBar() {
     </div>
   `;
 
-  // Mount inside map-viewport so it stays in the 78% column
   const viewport = document.getElementById('map-viewport');
   if (viewport) viewport.appendChild(bar);
 

@@ -7,9 +7,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>LoRa Mesh Network | Disaster Visualizer</title>
 
-  <!-- Leaflet CSS -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+  <!-- MapLibre GL JS & CSS (Fast, reliable 3D WebGL map engine with built-in worker) -->
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
+  <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+  <link rel="stylesheet" href="/src/hud.css" />
 
   <!-- Google Fonts: Inter & JetBrains Mono -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -21,24 +22,107 @@
 
 <body>
   <div id="app-layout">
-    <!-- Left: 80% Map Viewport -->
+    <!-- Left: 78% Map Viewport -->
     <main id="map-viewport">
       <div id="map"></div>
 
-      <!-- Top Overlay Bar -->
+      <!-- Top Overlay Header -->
       <header class="map-overlay-header">
         <div class="brand">
-          <span class="live-dot"></span>
-          <span class="brand-title">LoRa MESH NETWORK</span>
-          <span class="brand-badge">DISASTER RELIEF · SEARCH & RESCUE</span>
+          <svg class="brand-icon" viewBox="0 0 24 24" fill="none" stroke="#2ee66b" stroke-width="2">
+            <path d="M5 12.55a11 11 0 0 1 14.08 0"></path>
+            <path d="M1.42 9a16 16 0 0 1 21.16 0"></path>
+            <path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path>
+            <line x1="12" y1="20" x2="12.01" y2="20" stroke-width="3"></line>
+          </svg>
+          <span class="brand-title">DHRUVAJAAL</span>
+          <span class="brand-subtitle">LoRa Mesh Network / Disaster Relief</span>
+          <span class="badge-scenario" id="source-badge">Scenario</span>
         </div>
-        <div class="legend-bar">
-          <span class="legend-item"><span class="legend-pill strong"></span> Strong (-60 to -80 dBm)</span>
-          <span class="legend-item"><span class="legend-pill medium"></span> Medium (-81 to -100 dBm)</span>
-          <span class="legend-item"><span class="legend-pill weak"></span> Weak (-101 to -120 dBm)</span>
-          <span class="legend-item"><span class="legend-pill alternate"></span> Alternate Route</span>
+
+        <div class="header-event-title">
+          Kathmandu Valley Floods, 27–29 Sep 2024
+        </div>
+
+        <div class="header-actions">
+          <button class="context-btn" id="btn-context" title="View historical flood facts & response plan">
+            <span class="context-btn-icon">ℹ</span>
+            <span>Context &amp; Plan</span>
+          </button>
+          <div class="mesh-toggle-group">
+            <button class="toggle-btn active" id="btn-with-mesh">With mesh</button>
+            <button class="toggle-btn" id="btn-without-mesh">Without mesh</button>
+          </div>
         </div>
       </header>
+
+      <!-- Top-Center Alert Banner (Triggered at t=6s) -->
+      <div class="alert-banner" id="network-alert-banner">
+        <span class="alert-icon">⚠</span>
+        <span class="alert-text">Phone network DOWN</span>
+      </div>
+
+      <!-- Top-Left Full Legend Card (Matching Mockup) -->
+      <div class="tactical-legend-card">
+        <div class="legend-row">
+          <span class="legend-bar strong"></span>
+          <span class="legend-label">Strong signal</span>
+          <span class="legend-val">(-60 to -80 dBm)</span>
+        </div>
+        <div class="legend-row">
+          <span class="legend-bar medium"></span>
+          <span class="legend-label">Medium signal</span>
+          <span class="legend-val">(-81 to -100 dBm)</span>
+        </div>
+        <div class="legend-row">
+          <span class="legend-bar weak"></span>
+          <span class="legend-label">Weak signal</span>
+          <span class="legend-val">(-101 to -120 dBm)</span>
+        </div>
+        <div class="legend-row">
+          <span class="legend-bar alternate"></span>
+          <span class="legend-label">Alternate route</span>
+        </div>
+        <div class="legend-row">
+          <span class="legend-symbol packet">➔</span>
+          <span class="legend-label">Packet flow</span>
+        </div>
+        <div class="legend-row">
+          <span class="legend-symbol node-active">●</span>
+          <span class="legend-label">Node (active)</span>
+        </div>
+        <div class="legend-row">
+          <span class="legend-symbol node-down">⚠</span>
+          <span class="legend-label">Node (down)</span>
+        </div>
+        <div class="legend-row">
+          <span class="legend-symbol balloon">🎈</span>
+          <span class="legend-label">Balloon (100m tethered)</span>
+        </div>
+        <div class="legend-row">
+          <span class="legend-symbol drone">🛸</span>
+          <span class="legend-label">Drone (80m agile)</span>
+        </div>
+        <div class="legend-row">
+          <span class="legend-symbol flood-box">░</span>
+          <span class="legend-label">Flood zone (illustrative)</span>
+        </div>
+        <div class="legend-row">
+          <span class="legend-symbol safe-box">░</span>
+          <span class="legend-label">Safe ground</span>
+        </div>
+      </div>
+
+      <!-- Bottom-Left 3D Tactical Compass -->
+      <div class="compass-widget" id="compass-widget">
+        <div class="compass-dial" id="compass-dial">
+          <span class="compass-dir n">N</span>
+          <span class="compass-dir e">E</span>
+          <span class="compass-dir s">S</span>
+          <span class="compass-dir w">W</span>
+          <div class="compass-needle"></div>
+        </div>
+      </div>
     </main>
 
     <!-- Right: 20% Telemetry Sidebar -->
@@ -149,7 +233,21 @@
         </div>
       </section>
 
-      <!-- Section 4: Action Controls -->
+      <!-- Section 4: Base Camp Inbox (HQ Message Dispatch) -->
+      <section class="sidebar-section inbox-section">
+        <div class="section-header">
+          <span class="section-title">BASE CAMP INBOX</span>
+          <span class="status-live" id="inbox-count">0 DELIVERED</span>
+        </div>
+        <div class="inbox-container" id="inbox-list">
+          <div class="inbox-empty">
+            <div class="inbox-waiting-pulse"></div>
+            <div>Awaiting incoming mesh dispatches...</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Section 5: Action Controls -->
       <section class="sidebar-section actions">
         <button class="btn btn-primary" id="btn-simulate">
           <span>▶</span> Simulate Disaster
