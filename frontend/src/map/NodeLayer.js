@@ -12,6 +12,7 @@ export class NodeLayer {
 
   init() {
     this.renderCellTowers();
+    this.renderGroundNodes();
   }
 
   /**
@@ -55,12 +56,70 @@ export class NodeLayer {
   }
 
   /**
+   * Step 4.2: Render Ground Mesh Nodes (N1 - N8)
+   */
+  renderGroundNodes() {
+    const ML = getMapLibre();
+    if (!ML || !this.map) return;
+
+    // Default baseline RSSI map for labels
+    const defaultRssi = {
+      N1: -68, N2: -72, N3: -78, N4: -87,
+      N5: -82, N6: -76, N7: -70, N8: -69
+    };
+
+    const groundNodes = this.scenario.nodes.filter(n => !n.hidden);
+
+    groundNodes.forEach(node => {
+      const el = document.createElement('div');
+      el.className = `mesh-node-marker role-${node.role} online`;
+      el.id = `node-marker-${node.id}`;
+
+      // Choose icon symbol based on role
+      let iconHtml = '';
+      if (node.role === 'dongle') {
+        iconHtml = `<svg class="node-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`;
+      } else if (node.role === 'helper') {
+        iconHtml = `<svg class="node-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18M5 21V7l7-4 7 4v14M9 10h6M9 14h6M9 18h6"/></svg>`;
+      } else {
+        iconHtml = `<svg class="node-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M6.3 6.3a8 8 0 0 0 0 11.4M17.7 6.3a8 8 0 0 1 0 11.4"/></svg>`;
+      }
+
+      const rssiVal = defaultRssi[node.id] || -75;
+
+      el.innerHTML = `
+        <div class="node-beacon">
+          <div class="node-wave wave-1"></div>
+          <div class="node-wave wave-2"></div>
+          <div class="node-core">
+            ${iconHtml}
+            <div class="node-down-badge">⚠</div>
+          </div>
+        </div>
+        <div class="node-tag">
+          <div class="node-label">${node.id} · ${node.label}</div>
+          <div class="node-sub">${node.place} · <span class="rssi-text">${rssiVal} dBm</span></div>
+        </div>
+      `;
+
+      const marker = new ML.Marker({
+        element: el,
+        anchor: 'center'
+      })
+        .setLngLat([node.lon, node.lat])
+        .addTo(this.map);
+
+      this.nodeMarkers.set(node.id, { marker, element: el, data: node });
+    });
+  }
+
+  /**
    * Synchronize tower and node visual states with ScenarioEngine tick snapshot
    */
   update(state) {
     if (!state) return;
 
-    // Update Cell Towers (Online at t < 6s, Down at t >= 6s)
+    // 1. Update Cell Towers (Online at t < 6s, Down at t >= 6s)
     const towersOnline = state.towersOnline;
     this.towerMarkers.forEach(({ element }) => {
       if (towersOnline) {
@@ -85,5 +144,37 @@ export class NodeLayer {
         }
       }
     });
+
+    // 2. Update Ground Nodes (N1 - N8)
+    if (state.nodes) {
+      state.nodes.forEach(nodeState => {
+        const markerObj = this.nodeMarkers.get(nodeState.id);
+        if (!markerObj) return;
+
+        const { element, data } = markerObj;
+        const isOnline = nodeState.status === 'online';
+
+        if (isOnline) {
+          if (!element.classList.contains('online')) {
+            element.classList.remove('down');
+            element.classList.add('online');
+            const sub = element.querySelector('.node-sub');
+            if (sub) {
+              sub.innerHTML = `${data.place} · <span class="rssi-text">${nodeState.rssi || '-75'} dBm</span>`;
+            }
+          }
+        } else {
+          if (!element.classList.contains('down')) {
+            element.classList.remove('online');
+            element.classList.add('down');
+            const sub = element.querySelector('.node-sub');
+            if (sub) {
+              sub.innerHTML = `<span class="down-text">⚠ NODE DOWN · Flooded</span>`;
+            }
+          }
+        }
+      });
+    }
   }
 }
+

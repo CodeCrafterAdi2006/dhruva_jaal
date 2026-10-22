@@ -808,4 +808,201 @@ html, body {
   color: #EF4444;
 }
 
+/* ==========================================================================
+   Step 4.2: Ground Mesh Nodes (N1 - N8)
+   ========================================================================== */
+
+.mesh-node-marker {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  pointer-events: auto;
+  cursor: pointer;
+  user-select: none;
+  z-index: 20;
+  transition: transform 0.15s ease;
+}
+
+.mesh-node-marker:hover {
+  transform: scale(1.1);
+  z-index: 30;
+}
+
+.node-beacon {
+  position: relative;
+  width: 34px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.node-core {
+  position: relative;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.node-svg {
+  width: 14px;
+  height: 14px;
+  stroke: currentColor;
+}
+
+/* Role: DONGLE (N1 - Balkhu Rooftop) */
+.role-dongle .node-core {
+  background: rgba(239, 68, 68, 0.22);
+  border: 2px solid #EF4444;
+  color: #EF4444;
+  box-shadow: 0 0 16px rgba(239, 68, 68, 0.65);
+}
+
+.role-dongle .node-wave {
+  border-color: rgba(239, 68, 68, 0.65);
+}
+
+/* Role: BASE CAMP (N8 - Safe Ground HQ) */
+.role-helper .node-core {
+  background: rgba(46, 230, 107, 0.22);
+  border: 2px solid #2ee66b;
+  color: #2ee66b;
+  box-shadow: 0 0 16px rgba(46, 230, 107, 0.65);
+}
+
+.role-helper .node-wave {
+  border-color: rgba(46, 230, 107, 0.65);
+}
+
+/* Role: RELAY (N2 - N7) */
+.role-relay .node-core {
+  background: rgba(66, 133, 244, 0.22);
+  border: 2px solid #4285F4;
+  color: #4285F4;
+  box-shadow: 0 0 14px rgba(66, 133, 244, 0.55);
+}
+
+.role-relay .node-wave {
+  border-color: rgba(66, 133, 244, 0.55);
+}
+
+/* Concentric Pulse Waves */
+.node-wave {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  border-radius: 50%;
+  border-style: solid;
+  border-width: 1.5px;
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(-50%, -50%);
+}
+
+.mesh-node-marker.online .wave-1 {
+  width: 36px;
+  height: 36px;
+  animation: nodePulse 2.4s infinite ease-out;
+}
+
+.mesh-node-marker.online .wave-2 {
+  width: 50px;
+  height: 50px;
+  animation: nodePulse 2.4s infinite ease-out 1.2s;
+}
+
+@keyframes nodePulse {
+  0% {
+    transform: translate(-50%, -50%) scale(0.65);
+    opacity: 0.95;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1.45);
+    opacity: 0;
+  }
+}
+
+/* Node Down State (N3 at t=22s, N6 at t=40s, or manual trigger) */
+.mesh-node-marker.down .node-core {
+  background: rgba(30, 41, 59, 0.88);
+  border-color: #64748B;
+  color: #94A3B8;
+  box-shadow: none;
+}
+
+.mesh-node-marker.down .node-wave {
+  display: none;
+}
+
+.node-down-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: #F5B942;
+  color: #0B1220;
+  font-size: 8px;
+  font-weight: 900;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #0B1220;
+}
+
+.mesh-node-marker.down .node-down-badge {
+  display: flex;
+}
+
+/* Node Tag (Label & Status beneath node) */
+.node-tag {
+  margin-top: 4px;
+  background: rgba(14, 23, 38, 0.92);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  padding: 2px 7px;
+  text-align: center;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
+  line-height: 1.2;
+}
+
+.node-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  color: var(--text-primary);
+}
+
+.role-dongle .node-label { color: #F87171; }
+.role-helper .node-label { color: #4ADE80; }
+.role-relay .node-label { color: #60A5FA; }
+
+.node-sub {
+  font-size: 9px;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+}
+
+.node-sub .rssi-text {
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.node-sub .down-text {
+  color: #F5B942;
+  font-weight: 700;
+}
+
+
 

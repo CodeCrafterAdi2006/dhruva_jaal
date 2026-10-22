@@ -121,7 +121,7 @@ frontend/
 - [x] **Step 4.1: Render Cell Towers (`T1`–`T3`)**
   - Show 3 cell tower icons with green signal arcs from `t=0` to `t=6s`.
   - At `t=6s`, switch icons to gray with a red `✕` badge and label `"Cell Tower (Kathmandu)"`.
-- [ ] **Step 4.2: Render Ground Nodes (`N1`–`N8`)**
+- [x] **Step 4.2: Render Ground Nodes (`N1`–`N8`)**
   - `N1` (`DONGLE`): Glowing red core with concentric pulsing range rings, person icon inside, label `"DONGLE (trapped person)"`.
   - `N2`–`N7` (`RELAY`): Glowing blue core with concentric translucent radar rings, label `"RELAY"` and live `-XX dBm` readout underneath.
   - `N8` (`BASE CAMP`): Glowing neon green core with tent/HQ icon, label `"BASE CAMP"` and `"Safe ground"`.
