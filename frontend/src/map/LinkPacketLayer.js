@@ -7,22 +7,22 @@ export class LinkPacketLayer {
     this.linksSourceId = 'mesh-links-source';
     this.packetsSourceId = 'mesh-packets-source';
     this.emaJitter = new Map();
+    this.lastState = null;
   }
 
   init() {
     if (!this.map) return;
 
-    // Safely try adding sources; if style isn't ready yet, retry on 100ms timer
     try {
       if (this.map.getSource(this.linksSourceId)) return;
 
-      // 1. GeoJSON Source for Network Links
+      // --- Links Source ---
       this.map.addSource(this.linksSourceId, {
         type: 'geojson',
         data: { type: 'FeatureCollection', features: [] }
       });
 
-      // Outer link glow layer
+      // Bloom glow behind active links
       this.map.addLayer({
         id: 'mesh-links-glow',
         type: 'line',
@@ -32,11 +32,11 @@ export class LinkPacketLayer {
           'line-color': ['get', 'color'],
           'line-width': ['get', 'glowWidth'],
           'line-opacity': ['get', 'glowOpacity'],
-          'line-blur': 3
+          'line-blur': 4
         }
       });
 
-      // Active link core line
+      // Solid active link
       this.map.addLayer({
         id: 'mesh-links-core',
         type: 'line',
@@ -49,27 +49,27 @@ export class LinkPacketLayer {
         }
       });
 
-      // Inactive / downed route link line (dashed)
+      // Dashed inactive / down links
       this.map.addLayer({
         id: 'mesh-links-inactive',
         type: 'line',
         source: this.linksSourceId,
         filter: ['==', ['get', 'active'], false],
         paint: {
-          'line-color': '#64748B',
-          'line-width': 1.5,
-          'line-opacity': 0.45,
-          'line-dasharray': [2, 2]
+          'line-color': '#475569',
+          'line-width': 1.2,
+          'line-opacity': 0.35,
+          'line-dasharray': [3, 3]
         }
       });
 
-      // 2. GeoJSON Source for Active SOS & Heartbeat Packet Pulses
+      // --- Packets Source (ONLY real SOS orbs — no ambient noise) ---
       this.map.addSource(this.packetsSourceId, {
         type: 'geojson',
         data: { type: 'FeatureCollection', features: [] }
       });
 
-      // Outer packet halo glow
+      // Outer halo
       this.map.addLayer({
         id: 'mesh-packets-glow',
         type: 'circle',
@@ -77,12 +77,12 @@ export class LinkPacketLayer {
         paint: {
           'circle-radius': ['get', 'glowRadius'],
           'circle-color': '#00E5FF',
-          'circle-opacity': 0.75,
-          'circle-blur': 0.7
+          'circle-opacity': 0.55,
+          'circle-blur': 0.9
         }
       });
 
-      // Inner bright packet core
+      // Inner bright dot
       this.map.addLayer({
         id: 'mesh-packets-core',
         type: 'circle',
@@ -95,32 +95,33 @@ export class LinkPacketLayer {
         }
       });
 
-      console.log('[LinkPacketLayer] Neon links & packet layers added to map.');
+      console.log('[LinkPacketLayer] Layers mounted.');
 
-      const state =
-        this.lastState ||
-        (window.engine ? window.engine.reconstructStateAt(window.engine.currentTime || 0) : null);
-      if (state) {
-        this.update(state);
-      }
+      // Draw initial state
+      const state = this.lastState
+        || (window.engine ? window.engine.reconstructStateAt(0) : null);
+      if (state) this.update(state);
+
     } catch (err) {
-      // Style still initializing; retry in 100ms
-      setTimeout(() => this.init(), 100);
+      // MapLibre style not ready yet — retry in 150ms
+      setTimeout(() => this.init(), 150);
     }
   }
 
+  /** Resolve live [lon, lat] for any node, including moving drones */
   getNodeCoordinates(nodeId, state) {
     const nodeData = this.scenario.nodes.find(n => n.id === nodeId);
     if (!nodeData) return null;
 
     if (nodeData.role === 'drone' && state?.nodes) {
       const droneState = state.nodes.find(n => n.id === nodeId);
-      if (droneState && droneState.visible && droneState.flightProgress !== undefined) {
-        const baseCamp = this.scenario.nodes.find(n => n.id === 'N8');
+      if (droneState && droneState.visible && droneState.flightProgress > 0) {
+        const base = this.scenario.nodes.find(n => n.id === 'N8');
         const p = droneState.flightProgress;
-        const lon = baseCamp.lon + p * (nodeData.lon - baseCamp.lon);
-        const lat = baseCamp.lat + p * (nodeData.lat - baseCamp.lat);
-        return [lon, lat];
+        return [
+          base.lon + p * (nodeData.lon - base.lon),
+          base.lat + p * (nodeData.lat - base.lat)
+        ];
       }
     }
 
@@ -139,11 +140,12 @@ export class LinkPacketLayer {
       return;
     }
 
-    const linkFeatures = [];
-    const packetFeatures = [];
     const withMesh = state.withMesh !== false;
     const t = state.t || 0;
+    const linkFeatures = [];
+    const packetFeatures = [];
 
+    // ── 1. LINK LINES ──────────────────────────────────────────────────────────
     this.scenario.edges.forEach((edge, index) => {
       const coordA = this.getNodeCoordinates(edge.a, state);
       const coordB = this.getNodeCoordinates(edge.b, state);
@@ -152,9 +154,8 @@ export class LinkPacketLayer {
       const nodeAState = state.nodes?.find(n => n.id === edge.a);
       const nodeBState = state.nodes?.find(n => n.id === edge.b);
 
-      const aVisible = nodeAState ? nodeAState.visible !== false : true;
-      const bVisible = nodeBState ? nodeBState.visible !== false : true;
-      if (!aVisible || !bVisible) return;
+      // Skip edges whose endpoints are not yet deployed (drones/balloons before launch)
+      if (nodeAState?.visible === false || nodeBState?.visible === false) return;
 
       const aOnline = nodeAState
         ? nodeAState.status === 'online' && (nodeAState.flightProgress === undefined || nodeAState.flightProgress >= 1)
@@ -165,98 +166,67 @@ export class LinkPacketLayer {
 
       const isActive = withMesh && aOnline && bOnline;
 
+      // EMA RSSI breathing (±1.5 dB)
       const edgeKey = `${edge.a}-${edge.b}`;
       const seed = index * 1.37;
-      const currentJitter = Math.sin(t * 3.2 + seed) * 1.5;
-      const prevJitter = this.emaJitter.get(edgeKey) || 0;
-      const smoothedJitter = prevJitter * 0.88 + currentJitter * 0.12;
-      this.emaJitter.set(edgeKey, smoothedJitter);
+      const raw = Math.sin(t * 3.2 + seed) * 1.5;
+      const prev = this.emaJitter.get(edgeKey) || 0;
+      const jitter = prev * 0.88 + raw * 0.12;
+      this.emaJitter.set(edgeKey, jitter);
 
-      const liveRssi = (edge.baseRssi || -75) + smoothedJitter;
+      const liveRssi = (edge.baseRssi || -75) + jitter;
 
-      let linkColor = '#2EE66B'; // Strong (>= -80 dBm)
-      if (liveRssi < -100) {
-        linkColor = '#FF3B3B'; // Weak
-      } else if (liveRssi < -80) {
-        linkColor = '#FFB020'; // Medium
-      }
-
-      if (!isActive) {
-        linkColor = '#64748B';
-      }
+      let color = '#2EE66B';                      // strong ≥ −80
+      if (liveRssi < -100) color = '#FF3B3B';    // weak
+      else if (liveRssi < -80) color = '#FFB020'; // medium
+      if (!isActive) color = '#475569';
 
       linkFeatures.push({
         type: 'Feature',
-        geometry: {
-          type: 'LineString',
-          coordinates: [coordA, coordB]
-        },
+        geometry: { type: 'LineString', coordinates: [coordA, coordB] },
         properties: {
           id: edgeKey,
           active: isActive,
-          color: linkColor,
-          opacity: isActive ? 0.92 : 0.35,
-          glowOpacity: isActive ? 0.45 : 0.0,
-          coreWidth: isActive ? 2.6 : 1.4,
-          glowWidth: isActive ? 7.0 : 0.0,
+          color,
+          opacity:      isActive ? 0.90 : 0.30,
+          glowOpacity:  isActive ? 0.40 : 0.00,
+          coreWidth:    isActive ? 2.4  : 1.2,
+          glowWidth:    isActive ? 7.0  : 0.0,
           rssi: Math.round(liveRssi)
         }
       });
-
-      // Ambient HELLO discovery pulses along active links so the mesh looks alive immediately at t=0
-      if (isActive) {
-        const pulseProg = ((t * 0.65) + index * 0.23) % 1;
-        const pLon = coordA[0] + pulseProg * (coordB[0] - coordA[0]);
-        const pLat = coordA[1] + pulseProg * (coordB[1] - coordA[1]);
-        packetFeatures.push({
-          type: 'Feature',
-          geometry: { type: 'Point', coordinates: [pLon, pLat] },
-          properties: {
-            id: `hello-${edgeKey}`,
-            coreRadius: 3.2,
-            glowRadius: 7.5
-          }
-        });
-      }
     });
 
-    linksSource.setData({
-      type: 'FeatureCollection',
-      features: linkFeatures
-    });
+    linksSource.setData({ type: 'FeatureCollection', features: linkFeatures });
 
-    // High-visibility SOS Packet Orbs when SOS1-SOS4 are in transit
+    // ── 2. SOS PACKET ORBS (only real in-flight messages) ─────────────────────
     if (withMesh && state.sosStates) {
       state.sosStates.forEach(sos => {
-        if ((sos.state === 'SENT_TO_MESH' || sos.state === 'TRANSMITTING') && sos.fromNode && sos.toNode) {
-          const fromCoord = this.getNodeCoordinates(sos.fromNode, state);
-          const toCoord = this.getNodeCoordinates(sos.toNode, state);
+        if (
+          (sos.state === 'SENT_TO_MESH' || sos.state === 'TRANSMITTING')
+          && sos.fromNode && sos.toNode
+        ) {
+          const from = this.getNodeCoordinates(sos.fromNode, state);
+          const to   = this.getNodeCoordinates(sos.toNode,   state);
+          if (!from || !to) return;
 
-          if (fromCoord && toCoord) {
-            const p = Math.max(0, Math.min(1, sos.hopProgress || 0));
-            const curLon = fromCoord[0] + p * (toCoord[0] - fromCoord[0]);
-            const curLat = fromCoord[1] + p * (toCoord[1] - fromCoord[1]);
+          const p   = Math.max(0, Math.min(1, sos.hopProgress || 0));
+          const lon = from[0] + p * (to[0] - from[0]);
+          const lat = from[1] + p * (to[1] - from[1]);
 
-            packetFeatures.push({
-              type: 'Feature',
-              geometry: {
-                type: 'Point',
-                coordinates: [curLon, curLat]
-              },
-              properties: {
-                id: sos.id,
-                coreRadius: 6.5,
-                glowRadius: 14
-              }
-            });
-          }
+          packetFeatures.push({
+            type: 'Feature',
+            geometry: { type: 'Point', coordinates: [lon, lat] },
+            properties: {
+              id: sos.id,
+              coreRadius: 5.5,
+              glowRadius: 13
+            }
+          });
         }
       });
     }
 
-    packetsSource.setData({
-      type: 'FeatureCollection',
-      features: packetFeatures
-    });
+    packetsSource.setData({ type: 'FeatureCollection', features: packetFeatures });
   }
 }

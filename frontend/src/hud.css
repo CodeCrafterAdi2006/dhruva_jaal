@@ -1374,6 +1374,124 @@ html, body {
   color: #FCA5A5;
 }
 
+/* ─── Bottom Timeline Bar ─────────────────────────────────────────────────── */
+#timeline-bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 52px;
+  background: rgba(10, 18, 34, 0.92);
+  backdrop-filter: blur(12px);
+  border-top: 1px solid #1e3052;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 16px;
+  z-index: 200;
+  font-family: var(--font-mono);
+}
+
+.tl-left  { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+.tl-right { display: flex; align-items: center; gap: 6px;  flex-shrink: 0; }
+.tl-center { flex: 1; display: flex; flex-direction: column; gap: 4px; position: relative; }
+
+.tl-play-btn {
+  width: 34px; height: 34px;
+  border-radius: 50%;
+  background: #2EE66B;
+  color: #060d1a;
+  border: none;
+  font-size: 14px;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700;
+  transition: background 0.2s, transform 0.1s;
+}
+.tl-play-btn:hover  { background: #4dff8a; transform: scale(1.08); }
+.tl-play-btn:active { transform: scale(0.95); }
+
+.tl-clock {
+  font-size: 11px;
+  color: #8B9BB0;
+  white-space: nowrap;
+  min-width: 120px;
+}
+
+/* Phase dots row */
+.tl-phase-dots {
+  position: relative;
+  height: 12px;
+  width: 100%;
+}
+.tl-phase-dot {
+  position: absolute;
+  transform: translateX(-50%);
+  font-size: 8px;
+  color: #4285F4;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  cursor: default;
+  white-space: nowrap;
+}
+.tl-phase-dot::after {
+  content: '';
+  display: block;
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  background: #4285F4;
+  margin: 1px auto 0;
+  box-shadow: 0 0 4px #4285F4;
+}
+
+/* Range slider */
+.tl-slider {
+  -webkit-appearance: none;
+  width: 100%;
+  height: 4px;
+  border-radius: 2px;
+  background: #1e3052;
+  outline: none;
+  cursor: pointer;
+  accent-color: #2EE66B;
+}
+.tl-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px; height: 14px;
+  border-radius: 50%;
+  background: #2EE66B;
+  cursor: grab;
+  box-shadow: 0 0 6px #2EE66B88;
+}
+.tl-slider::-webkit-slider-thumb:active { cursor: grabbing; }
+
+.tl-speed-btn {
+  padding: 3px 8px;
+  border-radius: 4px;
+  border: 1px solid #263449;
+  background: transparent;
+  color: #8B9BB0;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.tl-speed-btn.active,
+.tl-speed-btn:hover {
+  background: #2EE66B22;
+  border-color: #2EE66B;
+  color: #2EE66B;
+}
+
+/* ─── Live Sidebar: Log items ─────────────────────────────────────────────── */
+.log-item-delivered { border-left: 2px solid #2EE66B; padding-left: 6px; }
+.state-failed { background: #7f1d1d; color: #fca5a5; }
+
+/* ─── Live Sidebar: node rows ─────────────────────────────────────────────── */
+.node-row-down .node-name { color: #F05252; }
+.node-row-down .meter-fill { background: #475569 !important; }
+
+
 
 
 

@@ -164,8 +164,8 @@ export class NodeLayer {
           </div>
           <div class="drone-shadow"></div>
           <div class="node-tag drone-tag">
-            <div class="node-label drone-name">${node.label} · 80m</div>
-            <div class="node-sub drone-sub">Agile aerial relay</div>
+            <div class="node-label drone-name">${node.id} · 80m</div>
+            <div class="node-sub drone-sub">Deploying...</div>
           </div>
         `;
       } else {
@@ -182,8 +182,8 @@ export class NodeLayer {
             <div class="balloon-ground-anchor"></div>
           </div>
           <div class="node-tag balloon-tag">
-            <div class="node-label balloon-name">${node.label} · 100m</div>
-            <div class="node-sub balloon-sub">Tethered aerostat</div>
+            <div class="node-label balloon-name">${node.id} · 100m</div>
+            <div class="node-sub balloon-sub">Rising...</div>
           </div>
         `;
       }
