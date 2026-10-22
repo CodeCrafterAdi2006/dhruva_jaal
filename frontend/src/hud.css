@@ -662,7 +662,6 @@ html, body {
    ========================================================================== */
 
 .cell-tower-marker {
-  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -813,7 +812,6 @@ html, body {
    ========================================================================== */
 
 .mesh-node-marker {
-  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -821,12 +819,11 @@ html, body {
   cursor: pointer;
   user-select: none;
   z-index: 20;
-  transition: transform 0.15s ease;
 }
 
-.mesh-node-marker:hover {
-  transform: scale(1.1);
-  z-index: 30;
+.mesh-node-marker:hover .node-core {
+  transform: scale(1.15);
+  box-shadow: 0 0 20px currentColor;
 }
 
 .node-beacon {

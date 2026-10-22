@@ -86,6 +86,10 @@ export class NodeLayer {
       }
 
       const rssiVal = defaultRssi[node.id] || -75;
+      const displayLabel = node.role === 'dongle' ? 'DONGLE' : (node.role === 'helper' ? 'BASE CAMP' : node.id);
+      const displaySub = node.role === 'helper' ? 'Safe ground' : `${rssiVal} dBm`;
+
+      el.title = `${node.id} (${node.label}) · ${node.place}`;
 
       el.innerHTML = `
         <div class="node-beacon">
@@ -97,8 +101,8 @@ export class NodeLayer {
           </div>
         </div>
         <div class="node-tag">
-          <div class="node-label">${node.id} · ${node.label}</div>
-          <div class="node-sub">${node.place} · <span class="rssi-text">${rssiVal} dBm</span></div>
+          <div class="node-label">${displayLabel}</div>
+          <div class="node-sub">${displaySub}</div>
         </div>
       `;
 
@@ -160,7 +164,9 @@ export class NodeLayer {
             element.classList.add('online');
             const sub = element.querySelector('.node-sub');
             if (sub) {
-              sub.innerHTML = `${data.place} · <span class="rssi-text">${nodeState.rssi || '-75'} dBm</span>`;
+              const defaultRssi = { N1: -68, N2: -72, N3: -78, N4: -87, N5: -82, N6: -76, N7: -70, N8: -69 };
+              const rssi = defaultRssi[data.id] || -75;
+              sub.textContent = data.role === 'helper' ? 'Safe ground' : `${rssi} dBm`;
             }
           }
         } else {
@@ -169,7 +175,7 @@ export class NodeLayer {
             element.classList.add('down');
             const sub = element.querySelector('.node-sub');
             if (sub) {
-              sub.innerHTML = `<span class="down-text">⚠ NODE DOWN · Flooded</span>`;
+              sub.innerHTML = `<span class="down-text">⚠ DOWN</span>`;
             }
           }
         }
