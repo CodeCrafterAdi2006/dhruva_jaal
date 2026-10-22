@@ -346,3 +346,255 @@ html, body {
   background: var(--bg-card);
   color: var(--text-primary);
 }
+
+/* ==========================================================================
+   Step 3.3: Tactical HUD Overlays (Legend, Alert Banner, Compass & Scale)
+   ========================================================================== */
+
+/* 1. Tactical Legend Card */
+.tactical-legend-card {
+  position: absolute;
+  top: 74px;
+  left: 16px;
+  z-index: 999;
+  width: 236px;
+  background: rgba(14, 23, 38, 0.88);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  padding: 10px 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  pointer-events: auto;
+  user-select: none;
+}
+
+.tactical-legend-card .legend-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2.5px 0;
+  font-size: 11px;
+}
+
+.tactical-legend-card .legend-bar {
+  width: 16px;
+  height: 3px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.tactical-legend-card .legend-bar.strong { background: var(--status-healthy); }
+.tactical-legend-card .legend-bar.medium { background: var(--status-warning); }
+.tactical-legend-card .legend-bar.weak { background: var(--status-alert); }
+.tactical-legend-card .legend-bar.alternate {
+  background: repeating-linear-gradient(90deg, var(--accent-blue) 0, var(--accent-blue) 3px, transparent 3px, transparent 6px);
+}
+
+.tactical-legend-card .legend-symbol {
+  width: 16px;
+  text-align: center;
+  font-size: 12px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tactical-legend-card .legend-symbol.packet {
+  color: #00e5ff;
+  font-weight: bold;
+  text-shadow: 0 0 6px rgba(0, 229, 255, 0.7);
+}
+
+.tactical-legend-card .legend-symbol.node-active {
+  color: var(--status-healthy);
+  text-shadow: 0 0 6px var(--status-healthy);
+  font-size: 10px;
+}
+
+.tactical-legend-card .legend-symbol.node-down {
+  color: var(--status-alert);
+  font-size: 11px;
+}
+
+.tactical-legend-card .legend-symbol.balloon,
+.tactical-legend-card .legend-symbol.drone {
+  font-size: 11px;
+}
+
+.tactical-legend-card .legend-symbol.flood-box {
+  width: 14px;
+  height: 9px;
+  background: rgba(30, 110, 220, 0.35);
+  border: 1px dashed #2a8af6;
+  border-radius: 2px;
+  color: transparent;
+}
+
+.tactical-legend-card .legend-symbol.safe-box {
+  width: 14px;
+  height: 9px;
+  background: rgba(46, 230, 107, 0.25);
+  border: 1px dashed var(--status-healthy);
+  border-radius: 2px;
+  color: transparent;
+}
+
+.tactical-legend-card .legend-label {
+  color: var(--text-primary);
+  font-size: 11px;
+  flex: 1;
+  white-space: nowrap;
+}
+
+.tactical-legend-card .legend-val {
+  color: var(--text-muted);
+  font-size: 10px;
+  font-family: var(--font-mono);
+  margin-left: auto;
+}
+
+/* 2. Top-Center Alert Banner (Phone network DOWN) */
+.alert-banner {
+  position: absolute;
+  top: 74px;
+  left: 50%;
+  transform: translate(-50%, -10px);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 16px;
+  background: rgba(185, 28, 28, 0.28);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(239, 68, 68, 0.7);
+  border-radius: 20px;
+  color: #FCA5A5;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  box-shadow: 0 0 20px rgba(239, 68, 68, 0.35);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s cubic-bezier(0.16, 1, 0.3, 1), transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.alert-banner.visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translate(-50%, 0);
+  animation: alertPulse 2s infinite ease-in-out;
+}
+
+@keyframes alertPulse {
+  0%, 100% { box-shadow: 0 0 16px rgba(239, 68, 68, 0.3); }
+  50% { box-shadow: 0 0 24px rgba(239, 68, 68, 0.6); }
+}
+
+.alert-banner .alert-icon {
+  color: #EF4444;
+  font-size: 13px;
+}
+
+/* 3. Bottom-Left Tactical Compass Rose */
+.compass-widget {
+  position: absolute;
+  bottom: 20px;
+  left: 16px;
+  z-index: 999;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: rgba(14, 23, 38, 0.88);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  cursor: pointer;
+  transition: border-color 0.15s ease, transform 0.15s ease;
+  user-select: none;
+}
+
+.compass-widget:hover {
+  border-color: var(--accent-blue);
+  transform: scale(1.05);
+}
+
+.compass-dial {
+  position: relative;
+  width: 34px;
+  height: 34px;
+  transition: transform 0.08s linear;
+}
+
+.compass-dir {
+  position: absolute;
+  font-size: 8.5px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  line-height: 1;
+}
+
+.compass-dir.n {
+  top: 1px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: #EF4444;
+}
+
+.compass-dir.s {
+  bottom: 1px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: var(--text-muted);
+}
+
+.compass-dir.e {
+  right: 1px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+}
+
+.compass-dir.w {
+  left: 1px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+}
+
+.compass-needle {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 3px;
+  height: 16px;
+  transform: translate(-50%, -50%);
+  background: linear-gradient(180deg, #EF4444 0%, #EF4444 50%, #64748B 50%, #64748B 100%);
+  border-radius: 2px;
+}
+
+/* 4. Tactical Restyling for MapLibre Scale Control */
+.maplibregl-ctrl-scale {
+  background-color: rgba(14, 23, 38, 0.88) !important;
+  backdrop-filter: blur(8px) !important;
+  -webkit-backdrop-filter: blur(8px) !important;
+  border: 1px solid var(--border-subtle) !important;
+  border-top: none !important;
+  color: var(--text-secondary) !important;
+  font-family: var(--font-mono) !important;
+  font-size: 10px !important;
+  font-weight: 600 !important;
+  padding: 2px 6px !important;
+  border-radius: 0 0 3px 3px !important;
+  margin-left: 72px !important; /* Offset next to compass */
+  margin-bottom: 24px !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35) !important;
+}
+
