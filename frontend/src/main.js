@@ -239,8 +239,71 @@ mapManager.init().then(map => {
   document.getElementById('btn-simulate')?.addEventListener('click', () => engine.killNextNode());
   document.getElementById('btn-reset')?.addEventListener('click', () => {
     engine.restart();
+    engine.clearDynamicNodes();
     engine.pause();
     updatePlayBtn();
+  });
+
+  // ─── Click-to-Spawn Dynamic Survivor Node ──────────────────────────────────
+  let isSpawnMode = false;
+  const btnSpawn = document.getElementById('btn-spawn-node');
+  const mapElement = document.getElementById('map');
+
+  if (btnSpawn) {
+    btnSpawn.addEventListener('click', () => {
+      isSpawnMode = !isSpawnMode;
+      btnSpawn.classList.toggle('active', isSpawnMode);
+      if (isSpawnMode) {
+        btnSpawn.innerHTML = '<span>✕</span> Click Map to Drop';
+        btnSpawn.style.background = 'rgba(255, 59, 59, 0.2)';
+        btnSpawn.style.borderColor = '#ff3b3b';
+        btnSpawn.style.color = '#ff3b3b';
+        if (mapElement) mapElement.style.cursor = 'crosshair';
+      } else {
+        btnSpawn.innerHTML = '<span>📍</span> Drop Survivor Node';
+        btnSpawn.style.background = 'rgba(0, 240, 255, 0.12)';
+        btnSpawn.style.borderColor = '#00f0ff';
+        btnSpawn.style.color = '#00f0ff';
+        if (mapElement) mapElement.style.cursor = '';
+      }
+    });
+  }
+
+  // Handle map click for dynamic node drop
+  map.on('click', (e) => {
+    if (!isSpawnMode) return;
+    const { lng, lat } = e.lngLat;
+    const node = engine.spawnDynamicNode(lng, lat, { role: 'dongle' });
+
+    // Exit spawn mode
+    isSpawnMode = false;
+    if (btnSpawn) {
+      btnSpawn.classList.remove('active');
+      btnSpawn.innerHTML = '<span>📍</span> Drop Survivor Node';
+      btnSpawn.style.background = 'rgba(0, 240, 255, 0.12)';
+      btnSpawn.style.borderColor = '#00f0ff';
+      btnSpawn.style.color = '#00f0ff';
+    }
+    if (mapElement) mapElement.style.cursor = '';
+
+    // Log tactical drop
+    if (logFeed) {
+      const item = document.createElement('div');
+      item.className = 'log-item';
+      item.innerHTML = `
+        <div class="log-meta">
+          <span class="log-time">MANUAL</span>
+          <span class="log-tag" style="background:#00f0ff22;color:#00f0ff;border:1px solid #00f0ff">DEPLOY</span>
+        </div>
+        <div class="log-detail" style="color:#00f0ff">📍 Dropped ${node.label} at (${lat.toFixed(3)}, ${lng.toFixed(3)})</div>
+      `;
+      logFeed.prepend(item);
+    }
+
+    // Immediately open popup on the newly spawned node
+    setTimeout(() => {
+      nodeLayer.openNodePopup(node.id, [lng, lat]);
+    }, 120);
   });
 
   // ─── Bottom Timeline Bar ───────────────────────────────────────────────────

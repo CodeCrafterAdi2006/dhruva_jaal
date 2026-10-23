@@ -243,11 +243,26 @@ export class NodeLayer {
       }
     });
 
-    // 2. Update Ground Nodes (N1 - N8) & Store-and-Forward on N5
+    // 2. Update Ground Nodes (N1 - N8 + Dynamic Nodes) & Store-and-Forward on N5
     if (state.nodes) {
+      // Clean up deleted dynamic markers
+      const currentActiveIds = new Set(state.nodes.map(n => n.id));
+      this.nodeMarkers.forEach((markerObj, id) => {
+        if (markerObj.data.isDynamic && !currentActiveIds.has(id)) {
+          markerObj.marker.remove();
+          this.nodeMarkers.delete(id);
+        }
+      });
+
       state.nodes.forEach(nodeState => {
-        const markerObj = this.nodeMarkers.get(nodeState.id);
-        if (!markerObj) return;
+        let markerObj = this.nodeMarkers.get(nodeState.id);
+        if (!markerObj) {
+          if (nodeState.isDynamic) {
+            markerObj = this.renderDynamicNodeMarker(nodeState);
+          } else {
+            return;
+          }
+        }
 
         const { element, data } = markerObj;
         const isOnline = nodeState.status === 'online';
@@ -343,6 +358,51 @@ export class NodeLayer {
   }
 
   /**
+   * Render dynamic node marker on map
+   */
+  renderDynamicNodeMarker(node) {
+    const ML = getMapLibre();
+    if (!ML || !this.map) return null;
+
+    const el = document.createElement('div');
+    el.className = `mesh-node-marker role-dongle dynamic-node online`;
+    el.id = `node-marker-${node.id}`;
+
+    const iconHtml = `<svg class="node-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 1 0-16 0"/></svg>`;
+
+    el.innerHTML = `
+      <div class="node-beacon">
+        <div class="node-wave wave-1" style="border-color:#00f0ff"></div>
+        <div class="node-wave wave-2" style="border-color:#00f0ff"></div>
+        <div class="node-icon-box" style="background:rgba(0,240,255,0.25);border:2px solid #00f0ff">
+          ${iconHtml}
+          <div class="node-status-badge">●</div>
+        </div>
+      </div>
+      <div class="node-info">
+        <div class="node-label" style="color:#00f0ff">${node.label}</div>
+        <div class="node-sub" style="color:#38bdf8">Dynamic · Online</div>
+      </div>
+    `;
+
+    const marker = new ML.Marker({
+      element: el,
+      anchor: 'center'
+    })
+      .setLngLat([node.lon, node.lat])
+      .addTo(this.map);
+
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.openNodePopup(node.id, [node.lon, node.lat]);
+    });
+
+    const markerObj = { marker, element: el, data: node };
+    this.nodeMarkers.set(node.id, markerObj);
+    return markerObj;
+  }
+
+  /**
    * Step 4.4: Open tactical inspection popover on node click
    */
   openNodePopup(nodeId, lngLat) {
@@ -364,6 +424,22 @@ export class NodeLayer {
         this.activePopup?.remove();
         this.activePopup = null;
         this.selectedNodeId = null;
+      }
+      if (e.target.closest('#btn-dyn-send-sos')) {
+        if (window.engine) {
+          window.engine.sendDynamicSos(nodeId, `EMERGENCY: Dynamic survivor at ${nodeId}. Immediate rescue needed.`);
+        }
+        this.activePopup?.remove();
+      }
+      if (e.target.closest('#btn-dyn-remove')) {
+        if (window.engine) {
+          window.engine.removeDynamicNode(nodeId);
+        }
+        if (this.nodeMarkers.has(nodeId)) {
+          this.nodeMarkers.get(nodeId).marker.remove();
+          this.nodeMarkers.delete(nodeId);
+        }
+        this.activePopup?.remove();
       }
     });
 
@@ -412,6 +488,44 @@ export class NodeLayer {
           </div>
           <div class="popup-notice ${isOnline ? 'notice-info' : 'notice-alert'}">
             ${isOnline ? 'Serving standard civilian smartphones. Vulnerable to flood-induced power cuts.' : 'Flooding severed municipal power grid and terrestrial fiber backhaul.'}
+          </div>
+        </div>
+      `;
+    }
+
+    // Dynamic Survivor or Relay Node
+    const dynamicNode = this.latestState?.nodes?.find(n => n.id === nodeId && n.isDynamic);
+    if (dynamicNode) {
+      const path = window.engine ? window.engine.findShortestPath(nodeId, 'N8', this.latestState) : null;
+      const pathText = path ? path.join(' ➔ ') : 'NO ROUTE (Held in Flash Memory)';
+      const hopsCount = path ? `${path.length - 1} hops` : 'ISOLATED';
+
+      return `
+        <div class="popup-header">
+          <div class="popup-badge" style="background:rgba(0,240,255,0.2);color:#00f0ff;border:1px solid #00f0ff">DYNAMIC NODE</div>
+          <div class="popup-title">${dynamicNode.label}</div>
+          <button class="popup-close-btn" title="Close">✕</button>
+        </div>
+        <div class="popup-body">
+          <div class="popup-row">
+            <span class="popup-label">LOCATION</span>
+            <span class="popup-val">${dynamicNode.place}</span>
+          </div>
+          <div class="popup-row">
+            <span class="popup-label">RADIO HOPS TO HQ</span>
+            <span class="popup-val" style="color:#00f0ff;font-weight:700;">${hopsCount}</span>
+          </div>
+          <div class="popup-row">
+            <span class="popup-label">LIVE MESH ROUTE</span>
+            <span class="popup-val" style="font-size:10px;color:#38bdf8;">${pathText}</span>
+          </div>
+          <div style="margin-top:10px;display:flex;flex-direction:column;gap:6px;">
+            <button id="btn-dyn-send-sos" style="background:#ff3b3b;color:white;border:none;padding:7px 10px;border-radius:4px;font-weight:700;cursor:pointer;font-size:11px;">
+              🚨 TRANSMIT LIVE SOS
+            </button>
+            <button id="btn-dyn-remove" style="background:transparent;color:#94a3b8;border:1px solid #475569;padding:5px 8px;border-radius:4px;cursor:pointer;font-size:10px;">
+              ✕ Remove Node
+            </button>
           </div>
         </div>
       `;

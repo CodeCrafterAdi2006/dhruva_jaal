@@ -21,6 +21,11 @@ export class ScenarioEngine extends DataSource {
     // Manual overrides for interactive judge Q&A (Simulate Disaster / Keyboard shortcuts)
     this.manualKilledNodes = new Set();
     this.manualAerialTrigger = null; // 'drones' | 'balloons'
+
+    // Dynamic Survivor & Relay Node Injection (Interactive Sandbox)
+    this.dynamicNodes = new Map();
+    this.dynamicEdges = [];
+    this.dynamicSosList = [];
   }
 
   init() {
@@ -61,6 +66,7 @@ export class ScenarioEngine extends DataSource {
     this.pause();
     this.manualKilledNodes.clear();
     this.manualAerialTrigger = null;
+    this.dynamicSosList = [];
     this.seek(0);
     this.play();
   }
@@ -84,6 +90,192 @@ export class ScenarioEngine extends DataSource {
       return nextTarget;
     }
     return null;
+  }
+
+  /**
+   * Helper: calculate spherical distance in meters between two [lon, lat] coordinates
+   */
+  calculateDistanceMeters(lon1, lat1, lon2, lat2) {
+    const R = 6371e3; // Earth radius in meters
+    const p1 = (lat1 * Math.PI) / 180;
+    const p2 = (lat2 * Math.PI) / 180;
+    const dp = ((lat2 - lat1) * Math.PI) / 180;
+    const dl = ((lon2 - lon1) * Math.PI) / 180;
+    const a = Math.sin(dp / 2) * Math.sin(dp / 2) +
+              Math.cos(p1) * Math.cos(p2) *
+              Math.sin(dl / 2) * Math.sin(dl / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  }
+
+  /**
+   * Drop / Spawn Dynamic Survivor or Relay Node anywhere on map
+   */
+  spawnDynamicNode(lon, lat, options = {}) {
+    const count = this.dynamicNodes.size + 1;
+    const id = options.id || `DYN-${count}`;
+    const role = options.role || 'dongle';
+    const label = role === 'dongle' ? `SURVIVOR ${count}` : `RELAY ${count}`;
+
+    const node = {
+      id,
+      role,
+      label,
+      sublabel: '(Dynamic Node)',
+      place: `GPS: ${lat.toFixed(4)}, ${lon.toFixed(4)}`,
+      lat,
+      lon,
+      alt_m: 6,
+      status: 'online',
+      visible: true,
+      flightProgress: 1,
+      isDynamic: true
+    };
+
+    this.dynamicNodes.set(id, node);
+
+    // Form physically realistic radio links to all nodes within range
+    const allExistingNodes = [
+      ...this.scenario.nodes,
+      ...Array.from(this.dynamicNodes.values()).filter(n => n.id !== id)
+    ];
+
+    allExistingNodes.forEach(neighbor => {
+      const dist = this.calculateDistanceMeters(lon, lat, neighbor.lon, neighbor.lat);
+      const isAerial = neighbor.role === 'drone' || neighbor.role === 'balloon';
+      const maxRange = isAerial ? (neighbor.role === 'balloon' ? 3500 : 2500) : 850;
+
+      if (dist <= maxRange) {
+        // Physical log-distance path loss
+        const rawRssi = isAerial
+          ? -60 - 20 * Math.log10(dist / 100)
+          : -68 - 32 * Math.log10(dist / 100);
+        const baseRssi = Math.max(-115, Math.min(-62, Math.round(rawRssi)));
+
+        this.dynamicEdges.push({
+          a: id,
+          b: neighbor.id,
+          baseRssi,
+          droneLink: neighbor.role === 'drone',
+          balloonLink: neighbor.role === 'balloon',
+          isDynamic: true
+        });
+      }
+    });
+
+    const state = this.reconstructStateAt(this.currentTime);
+    this.emit('state_update', state);
+    this.emit('node_spawned', { node, state });
+    return node;
+  }
+
+  /**
+   * Remove a dynamic node and its attached edges
+   */
+  removeDynamicNode(nodeId) {
+    this.dynamicNodes.delete(nodeId);
+    this.dynamicEdges = this.dynamicEdges.filter(e => e.a !== nodeId && e.b !== nodeId);
+    this.dynamicSosList = this.dynamicSosList.filter(s => s.from !== nodeId);
+    const state = this.reconstructStateAt(this.currentTime);
+    this.emit('state_update', state);
+  }
+
+  /**
+   * Clear all dynamic nodes
+   */
+  clearDynamicNodes() {
+    this.dynamicNodes.clear();
+    this.dynamicEdges = [];
+    this.dynamicSosList = [];
+    const state = this.reconstructStateAt(this.currentTime);
+    this.emit('state_update', state);
+  }
+
+  /**
+   * Dijkstra / BFS Shortest Path through living mesh edges to Base Camp N8
+   */
+  findShortestPath(fromId, toId = 'N8', state) {
+    if (!state) state = this.reconstructStateAt(this.currentTime);
+
+    const activeEdges = state.edges.filter(e => e.active);
+    const adj = new Map();
+
+    activeEdges.forEach(e => {
+      if (!adj.has(e.a)) adj.set(e.a, []);
+      if (!adj.has(e.b)) adj.set(e.b, []);
+      adj.get(e.a).push(e.b);
+      adj.get(e.b).push(e.a);
+    });
+
+    const queue = [[fromId]];
+    const visited = new Set([fromId]);
+
+    while (queue.length > 0) {
+      const path = queue.shift();
+      const curr = path[path.length - 1];
+
+      if (curr === toId) return path;
+
+      const neighbors = adj.get(curr) || [];
+      for (const next of neighbors) {
+        if (!visited.has(next)) {
+          visited.add(next);
+          queue.push([...path, next]);
+        }
+      }
+    }
+
+    return null; // Partitioned / No route
+  }
+
+  /**
+   * Live SOS Transmission from any dynamic or ground node
+   */
+  sendDynamicSos(fromId, customText) {
+    const state = this.reconstructStateAt(this.currentTime);
+    const path = this.findShortestPath(fromId, 'N8', state);
+    const sosId = `DYN-SOS-${this.dynamicSosList.length + 1}`;
+    const text = customText || 'EMERGENCY: SURVIVOR STRANDED. NEED RESCUE.';
+
+    if (path) {
+      const sosItem = {
+        id: sosId,
+        t: this.currentTime,
+        from: fromId,
+        path,
+        people: 2,
+        need: 'RESCUE',
+        battery: 18,
+        simClock: state.simClock || 'LIVE',
+        text,
+        isDynamic: true
+      };
+      this.dynamicSosList.push(sosItem);
+      this.emit('sos', sosItem);
+      const updatedState = this.reconstructStateAt(this.currentTime);
+      this.emit('state_update', updatedState);
+      return { success: true, path, sosItem };
+    } else {
+      const sosItem = {
+        id: sosId,
+        t: this.currentTime,
+        from: fromId,
+        path: [fromId],
+        people: 2,
+        need: 'RESCUE',
+        battery: 18,
+        simClock: state.simClock || 'LIVE',
+        text,
+        state: 'STORED',
+        statusText: 'STORED IN DONGLE FLASH · Waiting for live mesh path...',
+        isDynamic: true
+      };
+      this.dynamicSosList.push(sosItem);
+      this.emit('sos_failed', { id: sosId, reason: 'Isolated: No route to Base Camp. Held in flash memory.' });
+      const updatedState = this.reconstructStateAt(this.currentTime);
+      this.emit('state_update', updatedState);
+      return { success: false, reason: 'No route to Base Camp', sosItem };
+    }
   }
 
   loop() {
@@ -371,8 +563,14 @@ export class ScenarioEngine extends DataSource {
       }
     });
 
-    // Compute active edges for Map and Sidebar
-    const activeEdges = this.scenario.edges.map(edge => {
+    // Merge dynamically injected nodes
+    this.dynamicNodes.forEach((dynNode, id) => {
+      activeNodes.set(id, { ...dynNode });
+    });
+
+    // Compute active edges for Map and Sidebar (static edges + dynamic edges)
+    const allEdges = [...this.scenario.edges, ...this.dynamicEdges];
+    const activeEdges = allEdges.map(edge => {
       const nodeA = activeNodes.get(edge.a);
       const nodeB = activeNodes.get(edge.b);
       const endpointsOnline =
@@ -387,18 +585,20 @@ export class ScenarioEngine extends DataSource {
       };
     });
 
-    // Evaluate all SOS messages up to t
+    // Evaluate all SOS messages up to t (scenario timeline + dynamic user SOS)
     const sosStates = [];
     const deliveredSos = [];
-    this.scenario.timeline
-      .filter(item => item.type === 'sos')
-      .forEach(sosItem => {
-        const s = this.getSosStateAt(sosItem, t);
-        if (s) {
-          sosStates.push(s);
-          if (s.state === 'DELIVERED') deliveredSos.push(s);
-        }
-      });
+    const allSos = [
+      ...this.scenario.timeline.filter(item => item.type === 'sos'),
+      ...this.dynamicSosList
+    ];
+    allSos.forEach(sosItem => {
+      const s = this.getSosStateAt(sosItem, t);
+      if (s) {
+        sosStates.push(s);
+        if (s.state === 'DELIVERED') deliveredSos.push(s);
+      }
+    });
 
     return {
       t,

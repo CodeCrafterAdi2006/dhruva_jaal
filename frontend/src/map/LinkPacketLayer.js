@@ -94,10 +94,14 @@ export class LinkPacketLayer {
     }
   }
 
-  /** Resolve live [lon, lat] for any node, including moving drones */
+  /** Resolve live [lon, lat] for any node, including moving drones and dynamic nodes */
   getNodeCoordinates(nodeId, state) {
     const nodeData = this.scenario.nodes.find(n => n.id === nodeId);
-    if (!nodeData) return null;
+    if (!nodeData) {
+      const dynNode = state?.nodes?.find(n => n.id === nodeId);
+      if (dynNode) return [dynNode.lon, dynNode.lat];
+      return null;
+    }
 
     if (nodeData.role === 'drone' && state?.nodes) {
       const droneState = state.nodes.find(n => n.id === nodeId);
@@ -131,8 +135,9 @@ export class LinkPacketLayer {
     const linkFeatures = [];
     const packetFeatures = [];
 
-    // ── 1. LINK LINES ──────────────────────────────────────────────────────────
-    this.scenario.edges.forEach((edge, index) => {
+    // ── 1. LINK LINES (Scenario edges + Dynamic user edges) ───────────────────
+    const allEdges = state.edges || this.scenario.edges;
+    allEdges.forEach((edge, index) => {
       const coordA = this.getNodeCoordinates(edge.a, state);
       const coordB = this.getNodeCoordinates(edge.b, state);
       if (!coordA || !coordB) return;
