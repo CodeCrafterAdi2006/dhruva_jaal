@@ -14,7 +14,7 @@ export class MapManager {
   init() {
     const { center, zoom, pitch, bearing } = this.scenario.meta.map;
 
-    // Free, high-contrast Dark Raster Style (ESRI Dark Gray Canvas - zero API key, zero watermarks)
+    // High-contrast Tactical 3D Style (ESRI base + AWS Terrarium 3D DEM + OpenFreeMap 3D buildings)
     const darkStyle = {
       version: 8,
       sources: {
@@ -25,6 +25,19 @@ export class MapManager {
           ],
           tileSize: 256,
           attribution: '&copy; Esri, DeLorme, NAVTEQ'
+        },
+        'kathmandu-dem': {
+          type: 'raster-dem',
+          tiles: [
+            'https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'
+          ],
+          encoding: 'terrarium',
+          tileSize: 256,
+          maxzoom: 15
+        },
+        'openmaptiles': {
+          type: 'vector',
+          url: 'https://tiles.openfreemap.org/planet'
         }
       },
       layers: [
@@ -39,6 +52,23 @@ export class MapManager {
           source: 'esri-dark',
           minzoom: 0,
           maxzoom: 16
+        },
+        {
+          id: '3d-buildings',
+          type: 'fill-extrusion',
+          source: 'openmaptiles',
+          'source-layer': 'building',
+          minzoom: 13,
+          paint: {
+            'fill-extrusion-color': '#0d1829',
+            'fill-extrusion-height': [
+              'interpolate', ['linear'], ['zoom'],
+              13, 0,
+              13.5, ['coalesce', ['get', 'render_height'], ['*', ['coalesce', ['get', 'levels'], 2], 3.5], 8]
+            ],
+            'fill-extrusion-base': ['coalesce', ['get', 'render_min_height'], 0],
+            'fill-extrusion-opacity': 0.85
+          }
         }
       ]
     };
@@ -59,14 +89,38 @@ export class MapManager {
     this.map.addControl(new ML.ScaleControl({ maxWidth: 120, unit: 'metric' }), 'bottom-left');
 
     this.map.on('error', (e) => {
-      // Ignore routine raster tile edge misses
-      if (e.sourceId === 'esri-basemap') return;
+      // Ignore routine raster tile edge misses or terrain tile edges
+      if (e.sourceId === 'esri-dark' || e.sourceId === 'kathmandu-dem' || e.sourceId === 'openmaptiles') return;
       if (e.error) {
         console.debug('[MapManager] MapLibre event:', e.error.message || e.error);
       }
     });
 
-    this.renderZones();
+    // Step 1.1: 3D Himalayan DEM Terrain & Sky Fog setup on map load
+    const setup3DTerrain = () => {
+      try {
+        if (this.map.getSource('kathmandu-dem')) {
+          this.map.setTerrain({ source: 'kathmandu-dem', exaggeration: 1.25 });
+        }
+        if (typeof this.map.setSky === 'function') {
+          this.map.setSky({
+            'sky-color': '#060d1a',
+            'fog-color': '#0d1829',
+            'fog-ground-blend': 0.7
+          });
+        }
+      } catch (err) {
+        console.warn('[MapManager] 3D Terrain init note:', err.message);
+      }
+      this.renderZones();
+    };
+
+    if (this.map.loaded()) {
+      setup3DTerrain();
+    } else {
+      this.map.once('load', setup3DTerrain);
+    }
+
     return Promise.resolve(this.map);
   }
 
