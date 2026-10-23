@@ -3,6 +3,7 @@
 
 import { DataSource } from './DataSource.js';
 import scenarioData from '../data/scenario.json';
+import { MeshOptimizer } from './MeshOptimizer.js';
 
 export class ScenarioEngine extends DataSource {
   constructor() {
@@ -23,8 +24,13 @@ export class ScenarioEngine extends DataSource {
     this.manualAerialDeployed = new Set();
     this.manualAerialTrigger = null; // 'drones' | 'balloons'
 
+    // Algorithmic Gap Optimizer
+    this.meshOptimizer = new MeshOptimizer(this.scenario.nodes);
+
     // Dynamic Survivor & Relay Node Injection (Interactive Sandbox)
     this.dynamicNodes = new Map();
+    this.dynamicDrones = new Map();
+    this.dynamicBalloons = new Map();
     this.dynamicEdges = [];
     this.dynamicSosList = [];
 
@@ -80,9 +86,40 @@ export class ScenarioEngine extends DataSource {
     this.manualKilledNodes.clear();
     this.manualAerialDeployed.clear();
     this.manualAerialTrigger = null;
+    this.dynamicDrones.clear();
+    this.dynamicBalloons.clear();
+    this.dynamicEdges = [];
     this.dynamicSosList = [];
     this.seek(0);
     this.play();
+  }
+
+  /**
+   * Tactical Sandbox: Submerge Relay Node on Click (User clicks Submerge Relay tool, then clicks relay)
+   */
+  submergeRelay(nodeId) {
+    if (!nodeId) return null;
+    this.manualKilledNodes.add(nodeId);
+    this.emit('node_status', {
+      id: nodeId,
+      status: 'down',
+      reason: 'Submerged by rising floodwaters'
+    });
+
+    // Re-check all active survivor beacons to see if routes are broken or need re-routing
+    const state = this.reconstructStateAt(this.currentTime);
+    this.survivorBeacons.forEach(survivor => {
+      if (survivor.id !== 'N1' && !survivor.isAcknowledged) {
+        const path = this.findShortestPath(survivor.id, 'N8', state);
+        if (!path) {
+          survivor.storedInFlash = true;
+        }
+      }
+    });
+
+    const updatedState = this.reconstructStateAt(this.currentTime);
+    this.emit('state_update', updatedState);
+    return nodeId;
   }
 
   /**
@@ -97,38 +134,233 @@ export class ScenarioEngine extends DataSource {
     });
 
     if (nextTarget) {
-      this.manualKilledNodes.add(nextTarget);
-      this.emit('node_status', { id: nextTarget, status: 'down', reason: 'Manual disaster trigger' });
-      const updatedState = this.reconstructStateAt(this.currentTime);
-      this.emit('state_update', updatedState);
-      return nextTarget;
+      return this.submergeRelay(nextTarget);
     }
     return null;
   }
 
   /**
-   * Tactical Sandbox: Deploy Airborne Drone or Balloon Relay on demand
+   * Tactical Sandbox: Deploy Airborne Drone to precise clicked [lon, lat] coordinates
    */
-  deployAerial(type = 'drone') {
-    const ids = type === 'drone' ? ['DR1', 'DR2', 'DR3', 'DR4'] : ['BL1', 'BL2'];
-    ids.forEach(id => {
-      this.manualAerialDeployed.add(id);
+  dispatchDroneTo(lon, lat, options = {}) {
+    const count = this.dynamicDrones.size + 1;
+    const id = options.id || `DR-${count}`;
+    const baseCamp = this.scenario.nodes.find(n => n.id === 'N8') || { lon: 85.3160, lat: 27.7020 };
+
+    const drone = {
+      id,
+      role: 'drone',
+      label: options.label || `DRONE ${count}`,
+      sublabel: options.targetZone || 'Airborne Relay',
+      place: `Airborne (80m) at ${lat.toFixed(4)}, ${lon.toFixed(4)}`,
+      lat,
+      lon,
+      alt_m: 80,
+      status: 'online',
+      visible: true,
+      flightProgress: 0,
+      isDynamic: true,
+      takeoffTime: performance.now(),
+      basePos: [baseCamp.lon, baseCamp.lat],
+      targetPos: [lon, lat]
+    };
+
+    this.dynamicDrones.set(id, drone);
+
+    // Form aerial links (2500m LoRa line-of-sight range)
+    const allLivingNodes = [
+      ...this.scenario.nodes.filter(n => n.role !== 'drone' && n.role !== 'balloon'),
+      ...Array.from(this.dynamicNodes.values()),
+      baseCamp
+    ];
+
+    allLivingNodes.forEach(neighbor => {
+      const dist = this.calculateDistanceMeters(lon, lat, neighbor.lon, neighbor.lat);
+      if (dist <= 2500) {
+        const rawRssi = -60 - 20 * Math.log10(Math.max(1, dist) / 100);
+        const baseRssi = Math.max(-110, Math.min(-62, Math.round(rawRssi)));
+        this.dynamicEdges.push({
+          a: id,
+          b: neighbor.id,
+          baseRssi,
+          droneLink: true,
+          isDynamic: true
+        });
+      }
     });
+
     this.emit('aerial', {
-      type: type === 'drone' ? 'drones_launch' : 'balloons_launch',
-      ids,
+      type: 'drones_launch',
+      ids: [id],
       simClock: 'SANDBOX DISPATCH'
     });
-    setTimeout(() => {
-      this.emit('aerial', {
-        type: type === 'drone' ? 'drones_online' : 'balloons_online',
-        ids,
-        simClock: 'SANDBOX ACTIVE'
+
+    // Animate flight progress from Base Camp to target
+    const startTime = performance.now();
+    const duration = 1200; // 1.2s smooth tactical flight
+    const animateFlight = (now) => {
+      const p = Math.min(1, (now - startTime) / duration);
+      drone.flightProgress = p;
+      if (p < 1) {
+        requestAnimationFrame(animateFlight);
+      } else {
+        drone.flightProgress = 1;
+        this.emit('aerial', {
+          type: 'drones_online',
+          ids: [id],
+          simClock: 'SANDBOX ACTIVE'
+        });
+        this.checkSurvivorBeacons();
+      }
+      this.emit('state_update', this.reconstructStateAt(this.currentTime));
+    };
+    requestAnimationFrame(animateFlight);
+
+    return drone;
+  }
+
+  /**
+   * Tactical Sandbox: Deploy Tethered Aerostat Balloon to precise clicked [lon, lat] coordinates
+   * If a drone is stationed at/near this spot, recall that drone to Base Camp!
+   */
+  dispatchBalloonTo(lon, lat, options = {}) {
+    const count = this.dynamicBalloons.size + 1;
+    const id = options.id || `BL-${count}`;
+
+    // Check if any drone is within 600m of this spot -> Handover & Recall drone!
+    this.dynamicDrones.forEach((drone, droneId) => {
+      const d = this.calculateDistanceMeters(lon, lat, drone.lon, drone.lat);
+      if (d <= 600 && drone.status === 'online') {
+        drone.status = 'recalling';
+        this.emit('aerial', {
+          type: 'drones_recall',
+          ids: [droneId],
+          simClock: 'HANDOVER COMPLETE'
+        });
+        setTimeout(() => {
+          this.dynamicDrones.delete(droneId);
+          this.dynamicEdges = this.dynamicEdges.filter(e => e.a !== droneId && e.b !== droneId);
+          this.emit('state_update', this.reconstructStateAt(this.currentTime));
+        }, 1500);
+      }
+    });
+
+    const balloon = {
+      id,
+      role: 'balloon',
+      label: options.label || `BALLOON ${count}`,
+      sublabel: '100m Aerostat',
+      place: `Tethered Aerostat (100m) at ${lat.toFixed(4)}, ${lon.toFixed(4)}`,
+      lat,
+      lon,
+      alt_m: 100,
+      tethered: true,
+      status: 'online',
+      visible: true,
+      flightProgress: 0,
+      isDynamic: true
+    };
+
+    this.dynamicBalloons.set(id, balloon);
+
+    // Form high-altitude balloon links (3500m LoRa line-of-sight range)
+    const baseCamp = this.scenario.nodes.find(n => n.id === 'N8') || { lon: 85.3160, lat: 27.7020 };
+    const allLivingNodes = [
+      ...this.scenario.nodes.filter(n => n.role !== 'drone' && n.role !== 'balloon'),
+      ...Array.from(this.dynamicNodes.values()),
+      baseCamp
+    ];
+
+    allLivingNodes.forEach(neighbor => {
+      const dist = this.calculateDistanceMeters(lon, lat, neighbor.lon, neighbor.lat);
+      if (dist <= 3500) {
+        const rawRssi = -58 - 20 * Math.log10(Math.max(1, dist) / 100);
+        const baseRssi = Math.max(-110, Math.min(-60, Math.round(rawRssi)));
+        this.dynamicEdges.push({
+          a: id,
+          b: neighbor.id,
+          baseRssi,
+          balloonLink: true,
+          isDynamic: true
+        });
+      }
+    });
+
+    this.emit('aerial', {
+      type: 'balloons_launch',
+      ids: [id],
+      simClock: 'SANDBOX ASCENT'
+    });
+
+    // Animate balloon vertical rise
+    const startTime = performance.now();
+    const duration = 1500;
+    const animateRise = (now) => {
+      const p = Math.min(1, (now - startTime) / duration);
+      balloon.flightProgress = p;
+      if (p < 1) {
+        requestAnimationFrame(animateRise);
+      } else {
+        balloon.flightProgress = 1;
+        this.emit('aerial', {
+          type: 'balloons_online',
+          ids: [id],
+          simClock: 'AEROSTAT ONLINE'
+        });
+        this.checkSurvivorBeacons();
+      }
+      this.emit('state_update', this.reconstructStateAt(this.currentTime));
+    };
+    requestAnimationFrame(animateRise);
+
+    return balloon;
+  }
+
+  /**
+   * Tactical Sandbox: Algorithmic Gap Detection & Automatic Aerial Dispatch
+   * Uses MeshOptimizer to compute disconnect gaps and dispatch needed drones
+   */
+  autoBridgeGaps() {
+    const state = this.reconstructStateAt(this.currentTime);
+    const gaps = this.meshOptimizer.detectCoverageGaps(state.nodes, state.edges, 'N8');
+    if (!gaps || gaps.length === 0) {
+      return { needed: 0, drones: [] };
+    }
+
+    const dispatched = [];
+    gaps.forEach((gap) => {
+      const drone = this.dispatchDroneTo(gap.lon, gap.lat, {
+        label: `DRONE ${this.dynamicDrones.size + 1}`,
+        targetZone: gap.targetZone
       });
-    }, 700);
-    const updatedState = this.reconstructStateAt(this.currentTime);
-    this.emit('state_update', updatedState);
-    return ids;
+      dispatched.push({ drone, gap });
+
+      // After 7 seconds, automatically launch balloon to relieve the drone!
+      setTimeout(() => {
+        if (this.dynamicDrones.has(drone.id)) {
+          this.dispatchBalloonTo(gap.lon, gap.lat, {
+            label: `BALLOON ${this.dynamicBalloons.size + 1}`
+          });
+        }
+      }, 7000);
+    });
+
+    return { needed: gaps.length, drones: dispatched };
+  }
+
+  /**
+   * Tactical Sandbox: Legacy deploy helper
+   */
+  deployAerial(type = 'drone') {
+    if (type === 'drone') {
+      const targetLon = 85.3060;
+      const targetLat = 27.6950;
+      return [this.dispatchDroneTo(targetLon, targetLat)];
+    } else {
+      const targetLon = 85.3060;
+      const targetLat = 27.6950;
+      return [this.dispatchBalloonTo(targetLon, targetLat)];
+    }
   }
 
   /**
@@ -524,6 +756,7 @@ export class ScenarioEngine extends DataSource {
   /**
    * Compute exact SOS lifecycle state at any timestamp t
    * States: QUEUED -> STORED -> TRANSMITTING -> SENT_TO_MESH -> DELIVERED (or FAILED)
+   * With two-way ACK flight tracking: isAckInFlight, ackFromNode, ackToNode, ackHopProgress, ackDeliveredAt
    */
   getSosStateAt(sosItem, t) {
     if (t < sosItem.t) return null;
@@ -534,86 +767,277 @@ export class ScenarioEngine extends DataSource {
         state: 'FAILED',
         hopsCompleted: 0,
         deliveredAt: null,
-        reason: 'Phone network DOWN. No cellular or internet route available.'
+        isAckInFlight: false,
+        isAckDelivered: false,
+        reason: 'Cellular grid DOWN. Zero LoRa mesh coverage in Without-Mesh mode.'
       };
     }
 
-    const queueWindow = 0.35;
-    const storeWindow = 0.70;
-    const txWindow = 0.35;
     const hopSeconds = this.scenario.meta.hopSeconds || 1.2;
+
+    // ── SPECIFIC NARRATIVE TIMELINE: SOS1 (Part 1: Baseline Health) ─────────────
+    if (sosItem.id === 'SOS1') {
+      const qEnd = 2.0 + 0.35; // 2.35
+      const sEnd = 2.0 + 1.05; // 3.05
+      const fwdTotalHops = 4; // N1->N2->N3->N4->N8
+      const fwdDeliveredAt = sEnd + fwdTotalHops * hopSeconds; // 3.05 + 4.8 = 7.85
+      const ackPath = sosItem.ackPath || ['N8', 'N4', 'N3', 'N2', 'N1'];
+      const ackTotalHops = ackPath.length - 1; // 4
+      const ackDeliveredAt = fwdDeliveredAt + ackTotalHops * hopSeconds; // 7.85 + 4.8 = 12.65
+
+      if (t < qEnd) {
+        return {
+          ...sosItem,
+          state: 'QUEUED',
+          hopsCompleted: 0,
+          progress: 0,
+          isAckInFlight: false,
+          isAckDelivered: false,
+          statusText: 'QUEUED IN APP · Preparing packet'
+        };
+      }
+      if (t < sEnd) {
+        return {
+          ...sosItem,
+          state: 'STORED',
+          hopsCompleted: 0,
+          progress: 0,
+          isAckInFlight: false,
+          isAckDelivered: false,
+          statusText: 'STORED IN DONGLE FLASH · Preamble broadcast'
+        };
+      }
+      if (t < fwdDeliveredAt) {
+        const elapsed = t - sEnd;
+        const hopFloat = elapsed / hopSeconds;
+        const hopIdx = Math.min(fwdTotalHops - 1, Math.floor(hopFloat));
+        return {
+          ...sosItem,
+          state: 'SENT_TO_MESH',
+          hopsCompleted: hopIdx,
+          currentHopIndex: hopIdx,
+          fromNode: sosItem.path[hopIdx],
+          toNode: sosItem.path[hopIdx + 1],
+          hopProgress: hopFloat % 1,
+          deliveredAt: fwdDeliveredAt,
+          isAckInFlight: false,
+          isAckDelivered: false,
+          statusText: `SENT_TO_MESH · Via ${sosItem.path[hopIdx]} → ${sosItem.path[hopIdx + 1]}`
+        };
+      }
+      if (t < ackDeliveredAt) {
+        const ackElapsed = t - fwdDeliveredAt;
+        const ackHopFloat = ackElapsed / hopSeconds;
+        const ackHopIdx = Math.min(ackTotalHops - 1, Math.floor(ackHopFloat));
+        return {
+          ...sosItem,
+          state: 'DELIVERED',
+          hopsCompleted: fwdTotalHops,
+          progress: 1,
+          deliveredAt: fwdDeliveredAt,
+          ackDeliveredAt,
+          isAckInFlight: true,
+          isAckDelivered: false,
+          ackFromNode: ackPath[ackHopIdx],
+          ackToNode: ackPath[ackHopIdx + 1],
+          ackHopProgress: ackHopFloat % 1,
+          statusText: `DELIVERED TO HQ · ACK returning via relay (${ackPath[ackHopIdx]} → ${ackPath[ackHopIdx + 1]})`
+        };
+      }
+      return {
+        ...sosItem,
+        state: 'DELIVERED',
+        hopsCompleted: fwdTotalHops,
+        progress: 1,
+        deliveredAt: fwdDeliveredAt,
+        ackDeliveredAt,
+        isAckInFlight: false,
+        isAckDelivered: true,
+        statusText: 'DELIVERED & ACKNOWLEDGED · Two-way rescue confirmed'
+      };
+    }
+
+    // ── SPECIFIC NARRATIVE TIMELINE: SOS2 (Parts 2-4: Flood, Drone, Balloon ACK) ─
+    if (sosItem.id === 'SOS2') {
+      const qEnd = 24.0 + 0.35; // 24.35
+      const sEnd = 24.0 + 1.05; // 25.05
+      const hop0End = sEnd + 1 * hopSeconds; // 25.05 + 1.2 = 26.25 (N1 -> N2)
+      const droneBridgeStart = 38.0; // Drone online, releases stored message from N2
+      const bridgeHops = 3; // N2->DR1->N4->N8
+      const fwdDeliveredAt = droneBridgeStart + bridgeHops * hopSeconds; // 38.0 + 3.6 = 41.6
+      const balloonAckStart = 54.0; // After Balloon BL1 ascends to 100m (t=52) and DR1 returns
+      const ackPath = sosItem.ackPath || ['N8', 'N4', 'BL1', 'N2', 'N1'];
+      const ackTotalHops = ackPath.length - 1; // 4
+      const ackDeliveredAt = balloonAckStart + ackTotalHops * hopSeconds; // 54.0 + 4.8 = 58.8
+
+      if (t < qEnd) {
+        return {
+          ...sosItem,
+          state: 'QUEUED',
+          hopsCompleted: 0,
+          isAckInFlight: false,
+          isAckDelivered: false,
+          statusText: 'QUEUED IN APP · Periodic beacon #2'
+        };
+      }
+      if (t < sEnd) {
+        return {
+          ...sosItem,
+          state: 'STORED',
+          hopsCompleted: 0,
+          isAckInFlight: false,
+          isAckDelivered: false,
+          statusText: 'STORED IN DONGLE FLASH · Transmitting to N2'
+        };
+      }
+      if (t < hop0End) {
+        const p = (t - sEnd) / hopSeconds;
+        return {
+          ...sosItem,
+          state: 'SENT_TO_MESH',
+          hopsCompleted: 0,
+          fromNode: 'N1',
+          toNode: 'N2',
+          hopProgress: p,
+          isAckInFlight: false,
+          isAckDelivered: false,
+          statusText: 'SENT_TO_MESH · N1 → N2 (Balkhu Market)'
+        };
+      }
+      if (t < droneBridgeStart) {
+        // HELD AT N2 BECAUSE N3 IS SUBMERGED!
+        return {
+          ...sosItem,
+          state: 'STORED',
+          hopsCompleted: 1,
+          storedAtNode: 'N2',
+          isAckInFlight: false,
+          isAckDelivered: false,
+          statusText: 'STORED IN RELAY N2 FLASH · Bridge submerged, awaiting aerial drone'
+        };
+      }
+      if (t < fwdDeliveredAt) {
+        const elapsed = t - droneBridgeStart;
+        const hopFloat = elapsed / hopSeconds;
+        const hopOffset = Math.min(bridgeHops - 1, Math.floor(hopFloat));
+        const currentHopIdx = 1 + hopOffset; // 1: N2->DR1, 2: DR1->N4, 3: N4->N8
+        return {
+          ...sosItem,
+          state: 'SENT_TO_MESH',
+          hopsCompleted: currentHopIdx,
+          currentHopIndex: currentHopIdx,
+          fromNode: sosItem.path[currentHopIdx],
+          toNode: sosItem.path[currentHopIdx + 1],
+          hopProgress: hopFloat % 1,
+          deliveredAt: fwdDeliveredAt,
+          isAckInFlight: false,
+          isAckDelivered: false,
+          statusText: `SENT_TO_MESH · Aerial bridge (${sosItem.path[currentHopIdx]} → ${sosItem.path[currentHopIdx + 1]})`
+        };
+      }
+      if (t < balloonAckStart) {
+        // DELIVERED TO HQ, AWAITING BALLOON HANDOVER BEFORE TRANSMITTING ACK!
+        return {
+          ...sosItem,
+          state: 'DELIVERED',
+          hopsCompleted: 4,
+          progress: 1,
+          deliveredAt: fwdDeliveredAt,
+          isAckInFlight: false,
+          isAckDelivered: false,
+          statusText: 'DELIVERED TO HQ · Awaiting aerostat balloon handover before ACK'
+        };
+      }
+      if (t < ackDeliveredAt) {
+        // ACK TRANSMITTED THROUGH BALLOON BACKBONE!
+        const ackElapsed = t - balloonAckStart;
+        const ackHopFloat = ackElapsed / hopSeconds;
+        const ackHopIdx = Math.min(ackTotalHops - 1, Math.floor(ackHopFloat));
+        return {
+          ...sosItem,
+          state: 'DELIVERED',
+          hopsCompleted: 4,
+          progress: 1,
+          deliveredAt: fwdDeliveredAt,
+          ackDeliveredAt,
+          isAckInFlight: true,
+          isAckDelivered: false,
+          ackFromNode: ackPath[ackHopIdx],
+          ackToNode: ackPath[ackHopIdx + 1],
+          ackHopProgress: ackHopFloat % 1,
+          statusText: `HQ DELIVERED · ACK returning via balloon backbone (${ackPath[ackHopIdx]} → ${ackPath[ackHopIdx + 1]})`
+        };
+      }
+      return {
+        ...sosItem,
+        state: 'DELIVERED',
+        hopsCompleted: 4,
+        progress: 1,
+        deliveredAt: fwdDeliveredAt,
+        ackDeliveredAt,
+        isAckInFlight: false,
+        isAckDelivered: true,
+        statusText: 'DELIVERED & ACKNOWLEDGED · Two-way rescue confirmed via balloon'
+      };
+    }
+
+    // ── FALLBACK FOR GENERIC / DYNAMIC SOS ────────────────────────────────────
+    const qEnd = sosItem.t + 0.35;
+    const sEnd = sosItem.t + 0.70;
     const totalHops = sosItem.path.length - 1;
+    const transitStart = sEnd;
+    const deliveredAt = transitStart + totalHops * hopSeconds;
+    const ackPath = sosItem.ackPath || [...sosItem.path].reverse();
+    const ackHops = ackPath.length - 1;
+    const ackDeliveredAt = deliveredAt + ackHops * hopSeconds;
 
-    // 1. Initial QUEUED state
-    if (t < sosItem.t + queueWindow) {
-      return {
-        ...sosItem,
-        state: 'QUEUED',
-        hopsCompleted: 0,
-        progress: 0,
-        statusText: 'QUEUED IN APP · Preparing packet'
-      };
+    if (t < qEnd) {
+      return { ...sosItem, state: 'QUEUED', hopsCompleted: 0, isAckInFlight: false, isAckDelivered: false };
     }
-
-    const releaseTime = sosItem.holdUntil || (sosItem.t + storeWindow);
-
-    // 2. STORED in Dongle memory (including Store-and-Forward hold)
-    if (t < releaseTime) {
-      return {
-        ...sosItem,
-        state: 'STORED',
-        hopsCompleted: 0,
-        progress: 0,
-        statusText: sosItem.holdUntil
-          ? 'STORED IN DONGLE · Waiting for aerial mesh...'
-          : 'STORED IN DONGLE · ACK received from phone'
-      };
+    if (t < sEnd) {
+      return { ...sosItem, state: 'STORED', hopsCompleted: 0, isAckInFlight: false, isAckDelivered: false };
     }
-
-    // 3. TRANSMITTING (RF preamble and transmission beginning)
-    if (t < releaseTime + txWindow) {
-      return {
-        ...sosItem,
-        state: 'TRANSMITTING',
-        hopsCompleted: 0,
-        currentHopIndex: 0,
-        fromNode: sosItem.path[0],
-        toNode: sosItem.path[1],
-        hopProgress: (t - releaseTime) / hopSeconds,
-        statusText: `TRANSMITTING · Air link to ${sosItem.path[1]}`
-      };
-    }
-
-    const transitStart = releaseTime + txWindow;
-    const totalTransitTime = totalHops * hopSeconds;
-    const deliveredAt = transitStart + totalTransitTime;
-
-    // 4. SENT_TO_MESH (Hopping across relays)
     if (t < deliveredAt) {
       const elapsed = t - transitStart;
-      const currentHopFloat = elapsed / hopSeconds;
-      const hopIdx = Math.min(totalHops - 1, Math.floor(currentHopFloat));
+      const hopFloat = elapsed / hopSeconds;
+      const hopIdx = Math.min(totalHops - 1, Math.floor(hopFloat));
       return {
         ...sosItem,
         state: 'SENT_TO_MESH',
         hopsCompleted: hopIdx,
-        currentHopIndex: hopIdx,
         fromNode: sosItem.path[hopIdx],
         toNode: sosItem.path[hopIdx + 1],
-        hopProgress: currentHopFloat % 1, // 0..1 along current link
+        hopProgress: hopFloat % 1,
         deliveredAt,
-        statusText: `SENT_TO_MESH · Via ${sosItem.path[hopIdx]} → ${sosItem.path[hopIdx + 1]}`
+        isAckInFlight: false,
+        isAckDelivered: false
       };
     }
-
-    // 5. DELIVERED at Base Camp
+    if (t < ackDeliveredAt) {
+      const ackElapsed = t - deliveredAt;
+      const ackHopFloat = ackElapsed / hopSeconds;
+      const ackHopIdx = Math.min(ackHops - 1, Math.floor(ackHopFloat));
+      return {
+        ...sosItem,
+        state: 'DELIVERED',
+        hopsCompleted: totalHops,
+        deliveredAt,
+        ackDeliveredAt,
+        isAckInFlight: true,
+        isAckDelivered: false,
+        ackFromNode: ackPath[ackHopIdx],
+        ackToNode: ackPath[ackHopIdx + 1],
+        ackHopProgress: ackHopFloat % 1
+      };
+    }
     return {
       ...sosItem,
       state: 'DELIVERED',
       hopsCompleted: totalHops,
-      progress: 1,
       deliveredAt,
-      statusText: `DELIVERED · Base Camp reached in ${totalHops} hops`
+      ackDeliveredAt,
+      isAckInFlight: false,
+      isAckDelivered: true
     };
   }
 
@@ -715,17 +1139,13 @@ export class ScenarioEngine extends DataSource {
       });
     }
 
-    // Apply dynamic geographic flood inundation rule
-    if (activeNodes.has('N3') && t >= 21.5) {
+    // Apply dynamic geographic flood inundation rule (from scenario)
+    if (activeNodes.has('N3') && t >= 21.0) {
       activeNodes.get('N3').status = 'down';
-      activeNodes.get('N3').reason = 'Submerged by Bagmati flash surge (2.8m water)';
-    }
-    if (activeNodes.has('N6') && t >= 39.5) {
-      activeNodes.get('N6').status = 'down';
-      activeNodes.get('N6').reason = 'Submerged by downstream flood surge (4.1m water)';
+      activeNodes.get('N3').reason = 'Submerged by Bagmati flash surge (3.2m water)';
     }
 
-    // Apply manual user overrides (Simulate Disaster / 'K' key)
+    // Apply manual user overrides (Simulate Disaster / 'K' key / Submerge Relay Tool)
     this.manualKilledNodes.forEach(id => {
       if (activeNodes.has(id)) {
         activeNodes.get(id).status = 'down';
@@ -742,7 +1162,7 @@ export class ScenarioEngine extends DataSource {
       }
     });
 
-    // Merge dynamically injected nodes
+    // Merge dynamically injected nodes (Tactical Sandbox)
     this.dynamicNodes.forEach((dynNode, id) => {
       const beacon = this.survivorBeacons.get(id);
       activeNodes.set(id, {
@@ -753,21 +1173,25 @@ export class ScenarioEngine extends DataSource {
       });
     });
 
+    // Merge dynamically injected drones and balloons (Tactical Sandbox)
+    this.dynamicDrones.forEach((drone, id) => {
+      activeNodes.set(id, { ...drone });
+    });
+    this.dynamicBalloons.forEach((balloon, id) => {
+      activeNodes.set(id, { ...balloon });
+    });
+
     // N1 survivor distress cycles across timeline parts:
-    // - t < 14: Active distress before SOS1 (RED)
-    // - 14 <= t < 22: SOS1 confirmed (GREEN)
-    // - 22 <= t < 32: N3 floods & Part transition -> N1 returns to RED distress!
-    // - 32 <= t < 40: SOS2 confirmed via alternate route (GREEN)
-    // - 40 <= t < 91: N6 floods & Parts 3-5 transition -> N1 returns to RED distress!
-    // - t >= 91: SOS4 confirmed via balloon backbone (GREEN)
+    // - t < 12.65: Active distress before SOS1 ACK arrives (RED)
+    // - 12.65 <= t < 18.0: SOS1 confirmed by ACK arrival at N1 (GREEN)
+    // - 18.0 <= t < 58.8: Reset to RED for Part 2! Message gets stuck at N2, drone bridges, balloon takes over
+    // - t >= 58.8: Balloon ACK arrives at N1! Confirmed (GREEN)
     if (activeNodes.has('N1')) {
       let isN1Ack = false;
       if (this.withMesh) {
-        if (t >= 14 && t < 22) {
+        if (t >= 12.65 && t < 18.0) {
           isN1Ack = true;
-        } else if (t >= 32 && t < 40) {
-          isN1Ack = true;
-        } else if (t >= 91) {
+        } else if (t >= 58.8) {
           isN1Ack = true;
         }
       }

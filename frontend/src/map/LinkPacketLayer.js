@@ -127,18 +127,20 @@ export class LinkPacketLayer {
 
   /** Resolve live [lon, lat] for any node, including moving drones and dynamic nodes */
   getNodeCoordinates(nodeId, state) {
-    const nodeData = this.scenario.nodes.find(n => n.id === nodeId);
+    const fromState = state?.nodes?.find(n => n.id === nodeId);
+    const nodeData = this.scenario.nodes.find(n => n.id === nodeId) || fromState;
     if (!nodeData) {
-      const dynNode = state?.nodes?.find(n => n.id === nodeId)
-        || window.engine?.dynamicNodes?.get(nodeId);
+      const dynNode = window.engine?.dynamicNodes?.get(nodeId)
+        || window.engine?.dynamicDrones?.get(nodeId)
+        || window.engine?.dynamicBalloons?.get(nodeId);
       if (dynNode) return [dynNode.lon, dynNode.lat];
       return null;
     }
 
-    if (nodeData.role === 'drone' && state?.nodes) {
-      const droneState = state.nodes.find(n => n.id === nodeId);
+    if (nodeData.role === 'drone') {
+      const droneState = fromState || nodeData;
       if (droneState && droneState.visible && droneState.flightProgress > 0) {
-        const base = this.scenario.nodes.find(n => n.id === 'N8');
+        const base = this.scenario.nodes.find(n => n.id === 'N8') || { lon: 85.3160, lat: 27.7020 };
         const p = droneState.flightProgress;
         return [
           base.lon + p * (nodeData.lon - base.lon),
@@ -283,29 +285,53 @@ export class LinkPacketLayer {
     const packetFeatures = [];
     if (state?.withMesh !== false && state?.sosStates) {
       state.sosStates.forEach(sos => {
+        // 1. Forward SOS packet in flight (Cyan)
         if (
           (sos.state === 'SENT_TO_MESH' || sos.state === 'TRANSMITTING')
           && sos.fromNode && sos.toNode
         ) {
           const from = this.getNodeCoordinates(sos.fromNode, state);
           const to   = this.getNodeCoordinates(sos.toNode,   state);
-          if (!from || !to) return;
+          if (from && to) {
+            const p   = Math.max(0, Math.min(1, sos.hopProgress || 0));
+            const lon = from[0] + p * (to[0] - from[0]);
+            const lat = from[1] + p * (to[1] - from[1]);
 
-          const p   = Math.max(0, Math.min(1, sos.hopProgress || 0));
-          const lon = from[0] + p * (to[0] - from[0]);
-          const lat = from[1] + p * (to[1] - from[1]);
+            packetFeatures.push({
+              type: 'Feature',
+              geometry: { type: 'Point', coordinates: [lon, lat] },
+              properties: {
+                id: sos.id,
+                coreRadius: 5.5,
+                glowRadius: 14,
+                glowColor: '#00E5FF',
+                strokeColor: '#00E5FF'
+              }
+            });
+          }
+        }
 
-          packetFeatures.push({
-            type: 'Feature',
-            geometry: { type: 'Point', coordinates: [lon, lat] },
-            properties: {
-              id: sos.id,
-              coreRadius: 5.5,
-              glowRadius: 13,
-              glowColor: '#00E5FF',
-              strokeColor: '#00E5FF'
-            }
-          });
+        // 2. Return ACK packet in flight (Emerald Green #10B981)
+        if (sos.isAckInFlight && sos.ackFromNode && sos.ackToNode) {
+          const from = this.getNodeCoordinates(sos.ackFromNode, state);
+          const to   = this.getNodeCoordinates(sos.ackToNode,   state);
+          if (from && to) {
+            const p   = Math.max(0, Math.min(1, sos.ackHopProgress || 0));
+            const lon = from[0] + p * (to[0] - from[0]);
+            const lat = from[1] + p * (to[1] - from[1]);
+
+            packetFeatures.push({
+              type: 'Feature',
+              geometry: { type: 'Point', coordinates: [lon, lat] },
+              properties: {
+                id: `ACK-${sos.id}`,
+                coreRadius: 6.5,
+                glowRadius: 18,
+                glowColor: '#10B981',
+                strokeColor: '#10B981'
+              }
+            });
+          }
         }
       });
     }

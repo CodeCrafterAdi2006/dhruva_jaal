@@ -294,13 +294,14 @@ mapManager.init().then(map => {
       if (timelineBar) timelineBar.classList.remove('hidden');
       if (sandboxBar)  sandboxBar.classList.add('hidden');
       if (sourceBadge) sourceBadge.textContent = 'Scenario';
-      setSpawnMode(false);
+      setSandboxTool(null);
     } else {
       if (btnReplay)  btnReplay.classList.remove('active');
       if (btnSandbox) btnSandbox.classList.add('active');
       if (timelineBar) timelineBar.classList.add('hidden');
       if (sandboxBar)  sandboxBar.classList.remove('hidden');
       if (sourceBadge) sourceBadge.textContent = 'Sandbox';
+      setSandboxTool(null);
       // In sandbox mode, pause scripted playback so timeline doesn't advance unattended
       if (engine.isPlaying) {
         engine.pause();
@@ -320,70 +321,147 @@ mapManager.init().then(map => {
     updatePlayBtn();
   });
 
-  // ─── Click-to-Spawn Dynamic Survivor Node ──────────────────────────────────
-  let isSpawnMode = false;
+  // ─── Tactical Sandbox Tool State Machine ──────────────────────────────────
+  let currentSandboxTool = null; // null | 'drop-survivor' | 'submerge-relay' | 'deploy-drone' | 'deploy-balloon'
+  window.currentSandboxTool = null;
+
   const btnSpawn = document.getElementById('btn-spawn-node');
   const mapElement = document.getElementById('map');
 
-  function setSpawnMode(active) {
-    isSpawnMode = active;
-    const sbDropBtn = document.getElementById('sb-drop-node');
+  function setSandboxTool(tool) {
+    if (currentSandboxTool === tool) {
+      currentSandboxTool = null;
+    } else {
+      currentSandboxTool = tool;
+    }
+    window.currentSandboxTool = currentSandboxTool;
+
+    const hintEl = document.querySelector('#sandbox-bar .sandbox-hint');
+    const toolDefs = [
+      { id: 'sb-drop-node', name: 'drop-survivor', label: 'Drop Survivor', hint: 'Click anywhere on map to deploy a stranded survivor node' },
+      { id: 'sb-kill-node', name: 'submerge-relay', label: 'Submerge Relay', hint: 'Click any blue relay node on the map to submerge it under water' },
+      { id: 'sb-drone', name: 'deploy-drone', label: 'Deploy Drone', hint: 'Click anywhere on map to dispatch drone from Base Camp' },
+      { id: 'sb-balloon', name: 'deploy-balloon', label: 'Deploy Balloon', hint: 'Click anywhere on map to launch 100m aerostat balloon' }
+    ];
+
+    toolDefs.forEach(t => {
+      const btn = document.getElementById(t.id);
+      if (btn) {
+        const isActive = currentSandboxTool === t.name;
+        btn.classList.toggle('active', isActive);
+        btn.textContent = isActive ? `Cancel ${t.label.split(' ')[0]}` : t.label;
+      }
+    });
 
     if (btnSpawn) {
-      btnSpawn.classList.toggle('active', isSpawnMode);
-      if (isSpawnMode) {
-        btnSpawn.innerHTML = 'Cancel Drop';
-        btnSpawn.style.background = 'rgba(255, 59, 59, 0.2)';
-        btnSpawn.style.borderColor = '#ff3b3b';
-        btnSpawn.style.color = '#ff3b3b';
-      } else {
-        btnSpawn.innerHTML = 'Drop Survivor Node';
-        btnSpawn.style.background = 'rgba(0, 240, 255, 0.12)';
-        btnSpawn.style.borderColor = '#00f0ff';
-        btnSpawn.style.color = '#00f0ff';
-      }
-    }
-
-    if (sbDropBtn) {
-      sbDropBtn.classList.toggle('active', isSpawnMode);
-      sbDropBtn.innerHTML = isSpawnMode ? 'Cancel Drop' : 'Drop Survivor';
+      const isDropActive = currentSandboxTool === 'drop-survivor';
+      btnSpawn.classList.toggle('active', isDropActive);
+      btnSpawn.textContent = isDropActive ? 'Cancel Drop' : 'Drop Survivor Node';
     }
 
     if (mapElement) {
-      mapElement.style.cursor = isSpawnMode ? 'crosshair' : '';
+      if (currentSandboxTool === 'submerge-relay') {
+        mapElement.style.cursor = 'pointer';
+      } else if (currentSandboxTool) {
+        mapElement.style.cursor = 'crosshair';
+      } else {
+        mapElement.style.cursor = '';
+      }
+    }
+
+    if (hintEl) {
+      const activeDef = toolDefs.find(t => t.name === currentSandboxTool);
+      hintEl.textContent = activeDef
+        ? activeDef.hint
+        : 'Interactive Mode: Select a tactical tool to test dynamic routing';
     }
   }
 
   if (btnSpawn) {
-    btnSpawn.addEventListener('click', () => setSpawnMode(!isSpawnMode));
+    btnSpawn.addEventListener('click', () => {
+      if (activeMode !== 'sandbox') setMode('sandbox');
+      setSandboxTool(currentSandboxTool === 'drop-survivor' ? null : 'drop-survivor');
+    });
   }
 
-  // Handle map click for dynamic node drop
+  // Handle map click for all tactical sandbox tools
   map.on('click', (e) => {
-    if (!isSpawnMode) return;
+    if (activeMode !== 'sandbox' || !currentSandboxTool) return;
     const { lng, lat } = e.lngLat;
-    const node = engine.spawnDynamicNode(lng, lat, { role: 'dongle' });
 
-    setSpawnMode(false);
+    if (currentSandboxTool === 'drop-survivor') {
+      const node = engine.spawnDynamicNode(lng, lat, { role: 'dongle' });
+      setSandboxTool(null);
 
-    // Log tactical drop
-    if (logFeed) {
-      const item = document.createElement('div');
-      item.className = 'log-item';
-      item.innerHTML = `
-        <div class="log-meta">
-          <span class="log-time">MANUAL</span>
-          <span class="log-tag" style="background:#00f0ff22;color:#00f0ff;border:1px solid #00f0ff">DEPLOY</span>
-        </div>
-        <div class="log-detail" style="color:#00f0ff">[DEPLOY] Dropped ${node.label} at (${lat.toFixed(3)}, ${lng.toFixed(3)})</div>
-      `;
-      logFeed.prepend(item);
+      if (logFeed) {
+        const item = document.createElement('div');
+        item.className = 'log-item';
+        item.innerHTML = `
+          <div class="log-meta">
+            <span class="log-time">MANUAL</span>
+            <span class="log-tag" style="background:#00f0ff22;color:#00f0ff;border:1px solid #00f0ff">DEPLOY</span>
+          </div>
+          <div class="log-detail" style="color:#00f0ff">[DEPLOY] Dropped Survivor ${node.id} at (${lat.toFixed(3)}, ${lng.toFixed(3)})</div>
+        `;
+        logFeed.prepend(item);
+      }
+
+      setTimeout(() => {
+        nodeLayer.openNodePopup(node.id, [lng, lat]);
+      }, 120);
+
+    } else if (currentSandboxTool === 'deploy-drone') {
+      const drone = engine.dispatchDroneTo(lng, lat);
+      setSandboxTool(null);
+
+      if (logFeed) {
+        const item = document.createElement('div');
+        item.className = 'log-item';
+        item.innerHTML = `
+          <div class="log-meta">
+            <span class="log-time">AERIAL</span>
+            <span class="log-tag" style="background:#ffb02022;color:#ffb020;border:1px solid #ffb020">DRONE</span>
+          </div>
+          <div class="log-detail" style="color:#ffb020">[AERIAL] Dispatched ${drone.id} to (${lat.toFixed(3)}, ${lng.toFixed(3)}) at 80m</div>
+        `;
+        logFeed.prepend(item);
+      }
+
+    } else if (currentSandboxTool === 'deploy-balloon') {
+      const balloon = engine.dispatchBalloonTo(lng, lat);
+      setSandboxTool(null);
+
+      if (logFeed) {
+        const item = document.createElement('div');
+        item.className = 'log-item';
+        item.innerHTML = `
+          <div class="log-meta">
+            <span class="log-time">AEROSTAT</span>
+            <span class="log-tag" style="background:#2ee66b22;color:#2ee66b;border:1px solid #2ee66b">BALLOON</span>
+          </div>
+          <div class="log-detail" style="color:#2ee66b">[AEROSTAT] Launched 100m Balloon ${balloon.id} at (${lat.toFixed(3)}, ${lng.toFixed(3)})</div>
+        `;
+        logFeed.prepend(item);
+      }
+
+    } else if (currentSandboxTool === 'submerge-relay') {
+      // Find closest online relay within 350 meters
+      const state = engine.reconstructStateAt(engine.currentTime);
+      const onlineRelays = state.nodes.filter(n => (n.role === 'relay' || n.role === 'dongle') && n.status === 'online');
+      let closest = null;
+      let minDist = Infinity;
+      onlineRelays.forEach(n => {
+        const d = engine.calculateDistanceMeters(lng, lat, n.lon, n.lat);
+        if (d < minDist) {
+          minDist = d;
+          closest = n;
+        }
+      });
+      if (closest && minDist <= 350) {
+        engine.submergeRelay(closest.id);
+        setSandboxTool(null);
+      }
     }
-
-    // Immediately open popup on the newly spawned node
-    setTimeout(() => {
-      nodeLayer.openNodePopup(node.id, [lng, lat]);
-    }, 120);
   });
 
   // ─── Bottom Timeline & Sandbox Bars DOM Injection ─────────────────────────
@@ -457,30 +535,47 @@ mapManager.init().then(map => {
 
   // ─── Tactical Sandbox Bar Tool Actions ────────────────────────────────────
   document.getElementById('sb-drop-node')?.addEventListener('click', () => {
-    setSpawnMode(!isSpawnMode);
+    setSandboxTool('drop-survivor');
   });
 
   document.getElementById('sb-kill-node')?.addEventListener('click', () => {
-    engine.killNextNode();
+    setSandboxTool('submerge-relay');
   });
 
   document.getElementById('sb-drone')?.addEventListener('click', () => {
-    engine.deployAerial('drone');
+    setSandboxTool('deploy-drone');
   });
 
   document.getElementById('sb-balloon')?.addEventListener('click', () => {
-    engine.deployAerial('balloon');
+    setSandboxTool('deploy-balloon');
+  });
+
+  document.getElementById('sb-auto')?.addEventListener('click', () => {
+    const res = engine.autoBridgeGaps();
+    if (logFeed) {
+      const item = document.createElement('div');
+      item.className = 'log-item';
+      item.innerHTML = `
+        <div class="log-meta">
+          <span class="log-time">ALGORITHM</span>
+          <span class="log-tag" style="background:#00f0ff22;color:#00f0ff;border:1px solid #00f0ff">GAP-OPTIMIZER</span>
+        </div>
+        <div class="log-detail" style="color:#00f0ff">[OPTIMIZER] ${res.needed > 0 ? `Detected ${res.needed} coverage void(s). Dispatched aerial drone bridge.` : 'Mesh fully connected. Zero coverage voids detected.'}</div>
+      `;
+      logFeed.prepend(item);
+    }
   });
 
   document.getElementById('sb-reset')?.addEventListener('click', () => {
     engine.restart();
     engine.clearDynamicNodes();
+    setSandboxTool(null);
     engine.pause();
     updatePlayBtn();
   });
 
   // ─── Phase Dots Direct Navigation ──────────────────────────────────────────
-  const phaseTimes = { P1: 0, P2: 6, P3: 54, P4: 66, P5: 78 };
+  const phaseTimes = { P1: 0, P2: 18, P3: 30, P4: 46, P5: 68 };
   document.querySelectorAll('.tl-phase-dot').forEach(dot => {
     dot.style.cursor = 'pointer';
     dot.addEventListener('click', (e) => {
@@ -502,26 +597,30 @@ mapManager.init().then(map => {
       if (engine.isPlaying) engine.pause(); else engine.play();
       updatePlayBtn();
     } else if (e.key === 'k' || e.key === 'K') {
-      engine.killNextNode();
+      if (activeMode === 'sandbox') {
+        setSandboxTool('submerge-relay');
+      } else {
+        engine.killNextNode();
+      }
     } else if (e.key === 'r' || e.key === 'R') {
       engine.restart();
       engine.pause();
       updatePlayBtn();
     } else if (e.key === 'd' || e.key === 'D') {
-      // Jump to Drones launch (t=54s)
+      // Jump to Drones launch (t=30s in Part 3)
       if (activeMode === 'sandbox') {
-        engine.deployAerial('drone');
+        setSandboxTool('deploy-drone');
       } else {
-        engine.seek(54);
+        engine.seek(30);
         engine.play();
       }
       updatePlayBtn();
     } else if (e.key === 'b' || e.key === 'B') {
-      // Jump to Balloons rise (t=66s)
+      // Jump to Balloons rise (t=46s in Part 4)
       if (activeMode === 'sandbox') {
-        engine.deployAerial('balloon');
+        setSandboxTool('deploy-balloon');
       } else {
-        engine.seek(66);
+        engine.seek(46);
         engine.play();
       }
       updatePlayBtn();
@@ -568,11 +667,11 @@ function injectBottomBars() {
       </div>
       <div class="tl-center">
         <div class="tl-phase-dots">
-          <span class="tl-phase-dot" style="left:0%"    title="P1: Rain begins (t=0s)">P1</span>
-          <span class="tl-phase-dot" style="left:6%"    title="P2: Cell Towers DOWN (t=6s)">P2</span>
-          <span class="tl-phase-dot" style="left:54%"   title="P3: Drones launch (t=54s)">P3</span>
-          <span class="tl-phase-dot" style="left:66%"   title="P4: Balloons rise (t=66s)">P4</span>
-          <span class="tl-phase-dot" style="left:78%"   title="P5: Handoff complete (t=78s)">P5</span>
+          <span class="tl-phase-dot" style="left:0%"    title="P1: Baseline Relay Health (t=0s)">P1</span>
+          <span class="tl-phase-dot" style="left:18%"   title="P2: Relay Submerged & Route Blocked (t=18s)">P2</span>
+          <span class="tl-phase-dot" style="left:30%"   title="P3: Drone Dispatched to Gap (t=30s)">P3</span>
+          <span class="tl-phase-dot" style="left:46%"   title="P4: Balloon Handover & Balloon ACK (t=46s)">P4</span>
+          <span class="tl-phase-dot" style="left:68%"   title="P5: Mission Verified (t=68s)">P5</span>
         </div>
         <input type="range" id="tl-slider" class="tl-slider" min="0" max="1000" value="0" step="1">
       </div>
@@ -592,20 +691,23 @@ function injectBottomBars() {
     sb.innerHTML = `
       <div class="sandbox-left">
         <span class="sandbox-badge">TACTICAL SANDBOX</span>
-        <span class="sandbox-hint">Interactive Mode: Drop survivors or submerge relays to test dynamic routing</span>
+        <span class="sandbox-hint">Interactive Mode: Select a tactical tool to test dynamic routing</span>
       </div>
       <div class="sandbox-tools">
         <button class="sb-tool-btn" id="sb-drop-node" title="Click anywhere on the map to drop a survivor node">
           Drop Survivor
         </button>
-        <button class="sb-tool-btn" id="sb-kill-node" title="Submerge next relay under rising water">
+        <button class="sb-tool-btn" id="sb-kill-node" title="Click any blue relay to submerge it under rising floodwaters">
           Submerge Relay
         </button>
-        <button class="sb-tool-btn" id="sb-drone" title="Dispatch aerial drone relay to link isolated nodes">
+        <button class="sb-tool-btn" id="sb-drone" title="Click anywhere on map to dispatch drone from Base Camp">
           Deploy Drone
         </button>
-        <button class="sb-tool-btn" id="sb-balloon" title="Deploy high-altitude balloon aerostat relay">
+        <button class="sb-tool-btn" id="sb-balloon" title="Click anywhere on map to anchor a 100m aerostat balloon">
           Deploy Balloon
+        </button>
+        <button class="sb-tool-btn" id="sb-auto" title="Run MeshOptimizer algorithmic gap analysis and auto-bridge with drones">
+          Auto Gap-Bridge
         </button>
         <button class="sb-tool-btn" id="sb-reset" title="Clear dynamic nodes & reset network">
           Reset Sandbox

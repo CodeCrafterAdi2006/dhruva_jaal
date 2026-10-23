@@ -121,6 +121,12 @@ export class NodeLayer {
 
       el.addEventListener('click', (e) => {
         e.stopPropagation();
+        if (window.currentSandboxTool === 'submerge-relay') {
+          if (node.role === 'relay' || node.role === 'dongle') {
+            window.engine?.submergeRelay(node.id);
+            return;
+          }
+        }
         this.openNodePopup(node.id, [node.lon, node.lat]);
       });
 
@@ -294,11 +300,24 @@ export class NodeLayer {
       });
     }
 
-    // 3. Update Aerial Relays (DR1, DR2 Drones & BL1, BL2 Balloons)
-    if (this.aerialMarkers && state.nodes) {
+    // 3. Update Aerial Relays (DR1, DR2 Drones & BL1, BL2 Balloons + Dynamic Aerials)
+    if (state.nodes) {
+      // Clean up recalled/deleted dynamic aerial markers
+      const currentActiveIds = new Set(state.nodes.map(n => n.id));
       this.aerialMarkers.forEach((markerObj, id) => {
-        const nodeState = state.nodes.find(n => n.id === id);
-        if (!nodeState) return;
+        if (markerObj.data.isDynamic && !currentActiveIds.has(id)) {
+          markerObj.marker.remove();
+          this.aerialMarkers.delete(id);
+        }
+      });
+
+      const allAerials = state.nodes.filter(n => n.role === 'drone' || n.role === 'balloon');
+      allAerials.forEach(nodeState => {
+        let markerObj = this.aerialMarkers.get(nodeState.id);
+        if (!markerObj) {
+          markerObj = this.renderDynamicAerialMarker(nodeState);
+        }
+        if (!markerObj) return;
 
         const { marker, element, data, basePos, targetPos } = markerObj;
         const isVisible = nodeState.visible && nodeState.flightProgress > 0;
@@ -438,11 +457,91 @@ export class NodeLayer {
 
     el.addEventListener('click', (e) => {
       e.stopPropagation();
+      if (window.currentSandboxTool === 'submerge-relay') {
+        window.engine?.submergeRelay(node.id);
+        return;
+      }
       this.openNodePopup(node.id, [node.lon, node.lat]);
     });
 
     const markerObj = { marker, element: el, data: node };
     this.nodeMarkers.set(node.id, markerObj);
+    return markerObj;
+  }
+
+  /**
+   * Render dynamic aerial marker on map (Drones & Balloons)
+   */
+  renderDynamicAerialMarker(node) {
+    const ML = getMapLibre();
+    if (!ML || !this.map) return null;
+
+    const baseCamp = this.scenario.nodes.find(n => n.id === 'N8') || { lon: 85.3160, lat: 27.7020 };
+    const basePos = node.basePos || [baseCamp.lon, baseCamp.lat];
+    const targetPos = node.targetPos || [node.lon, node.lat];
+
+    const el = document.createElement('div');
+    el.className = `aerial-marker role-${node.role}`;
+    el.id = `aerial-marker-${node.id}`;
+
+    if (node.role === 'drone') {
+      el.innerHTML = `
+        <div class="drone-marker-inner">
+          <div class="drone-rotor rotor-tl"></div>
+          <div class="drone-rotor rotor-tr"></div>
+          <div class="drone-rotor rotor-bl"></div>
+          <div class="drone-rotor rotor-br"></div>
+          <svg class="drone-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 2v20M2 12h20M7 7l10 10M17 7L7 17"/>
+            <circle cx="12" cy="12" r="3.5" fill="#ffb020"/>
+          </svg>
+        </div>
+        <div class="drone-shadow"></div>
+        <div class="node-tag drone-tag">
+          <div class="node-label drone-name">${node.id} · 80m</div>
+          <div class="node-sub drone-sub">Airborne Relay</div>
+        </div>
+      `;
+    } else {
+      el.innerHTML = `
+        <div class="balloon-container">
+          <div class="balloon-aerostat">
+            <svg class="balloon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+              <path d="M12 2a7 7 0 0 0-7 7c0 4.5 5 10 7 11 2-1 7-6.5 7-11a7 7 0 0 0-7-7z" fill="rgba(0, 229, 255, 0.25)"/>
+              <circle cx="12" cy="9" r="2.5" fill="#00e5ff"/>
+            </svg>
+          </div>
+          <div class="balloon-tether"></div>
+          <div class="balloon-ground-anchor"></div>
+        </div>
+        <div class="node-tag balloon-tag">
+          <div class="node-label balloon-name">${node.id} · 100m</div>
+          <div class="node-sub balloon-sub">100m Aerostat</div>
+        </div>
+      `;
+    }
+
+    const marker = new ML.Marker({
+      element: el,
+      anchor: 'center'
+    })
+      .setLngLat(targetPos)
+      .addTo(this.map);
+
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const currentLngLat = marker.getLngLat();
+      this.openNodePopup(node.id, [currentLngLat.lng, currentLngLat.lat]);
+    });
+
+    const markerObj = {
+      marker,
+      element: el,
+      data: node,
+      basePos,
+      targetPos
+    };
+    this.aerialMarkers.set(node.id, markerObj);
     return markerObj;
   }
 
