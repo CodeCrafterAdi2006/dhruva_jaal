@@ -37,21 +37,7 @@ mapManager.init().then(map => {
   window.inbox           = inbox;
   window.modals          = modals;
 
-  // ─── Compass ────────────────────────────────────────────────────────────────
-  const compassDial   = document.getElementById('compass-dial');
-  const compassWidget = document.getElementById('compass-widget');
-  if (compassDial) {
-    const updateCompass = () => {
-      compassDial.style.transform = `rotate(${-map.getBearing()}deg)`;
-    };
-    map.on('rotate', updateCompass);
-    updateCompass();
-  }
-  if (compassWidget) {
-    compassWidget.addEventListener('click', () =>
-      map.easeTo({ bearing: -15, pitch: 52, duration: 800 })
-    );
-  }
+  // Compass widget removed to prevent control blocking and UI clutter
 
   // ─── Alert Banner ──────────────────────────────────────────────────────────
   const alertBanner = document.getElementById('network-alert-banner');
@@ -138,9 +124,11 @@ mapManager.init().then(map => {
         const valStr = dbm !== null ? `${dbm} dBm` : '— OFFLINE';
         nodesList.innerHTML += `
           <div class="node-row ${n.status !== 'online' ? 'node-row-down' : ''}">
-            <span class="node-name ${n.role}">${label}</span>
+            <div class="node-row-header">
+              <span class="node-name ${n.role}" title="${label}">${label}</span>
+              <span class="node-val">${valStr}</span>
+            </div>
             <div class="meter-track"><div class="meter-fill ${cls}" style="width:${w}%"></div></div>
-            <span class="node-val">${valStr}</span>
           </div>`;
       });
     }
@@ -279,6 +267,41 @@ mapManager.init().then(map => {
     btnWithout.addEventListener('click', () => setMeshMode(false));
   }
 
+  // ─── Mode Switcher: Scripted Incident Replay vs Tactical Sandbox ──────────
+  let activeMode = 'replay'; // 'replay' | 'sandbox'
+  const btnReplay   = document.getElementById('btn-mode-replay');
+  const btnSandbox  = document.getElementById('btn-mode-sandbox');
+  const sourceBadge = document.getElementById('source-badge');
+
+  function setMode(mode) {
+    activeMode = mode;
+    const timelineBar = document.getElementById('timeline-bar');
+    const sandboxBar  = document.getElementById('sandbox-bar');
+
+    if (mode === 'replay') {
+      if (btnReplay)  btnReplay.classList.add('active');
+      if (btnSandbox) btnSandbox.classList.remove('active');
+      if (timelineBar) timelineBar.classList.remove('hidden');
+      if (sandboxBar)  sandboxBar.classList.add('hidden');
+      if (sourceBadge) sourceBadge.textContent = 'Scenario';
+      setSpawnMode(false);
+    } else {
+      if (btnReplay)  btnReplay.classList.remove('active');
+      if (btnSandbox) btnSandbox.classList.add('active');
+      if (timelineBar) timelineBar.classList.add('hidden');
+      if (sandboxBar)  sandboxBar.classList.remove('hidden');
+      if (sourceBadge) sourceBadge.textContent = 'Sandbox';
+      // In sandbox mode, pause scripted playback so timeline doesn't advance unattended
+      if (engine.isPlaying) {
+        engine.pause();
+      }
+      updatePlayBtn();
+    }
+  }
+
+  if (btnReplay)  btnReplay.addEventListener('click', () => setMode('replay'));
+  if (btnSandbox) btnSandbox.addEventListener('click', () => setMode('sandbox'));
+
   // ─── Sidebar Action Buttons ────────────────────────────────────────────────
   document.getElementById('btn-simulate')?.addEventListener('click', () => engine.killNextNode());
   document.getElementById('btn-reset')?.addEventListener('click', () => {
@@ -293,24 +316,37 @@ mapManager.init().then(map => {
   const btnSpawn = document.getElementById('btn-spawn-node');
   const mapElement = document.getElementById('map');
 
-  if (btnSpawn) {
-    btnSpawn.addEventListener('click', () => {
-      isSpawnMode = !isSpawnMode;
+  function setSpawnMode(active) {
+    isSpawnMode = active;
+    const sbDropBtn = document.getElementById('sb-drop-node');
+
+    if (btnSpawn) {
       btnSpawn.classList.toggle('active', isSpawnMode);
       if (isSpawnMode) {
         btnSpawn.innerHTML = '<span>✕</span> Click Map to Drop';
         btnSpawn.style.background = 'rgba(255, 59, 59, 0.2)';
         btnSpawn.style.borderColor = '#ff3b3b';
         btnSpawn.style.color = '#ff3b3b';
-        if (mapElement) mapElement.style.cursor = 'crosshair';
       } else {
         btnSpawn.innerHTML = '<span>📍</span> Drop Survivor Node';
         btnSpawn.style.background = 'rgba(0, 240, 255, 0.12)';
         btnSpawn.style.borderColor = '#00f0ff';
         btnSpawn.style.color = '#00f0ff';
-        if (mapElement) mapElement.style.cursor = '';
       }
-    });
+    }
+
+    if (sbDropBtn) {
+      sbDropBtn.classList.toggle('active', isSpawnMode);
+      sbDropBtn.innerHTML = isSpawnMode ? '<span>✕</span> Cancel Drop' : '<span>📍</span> Drop Survivor';
+    }
+
+    if (mapElement) {
+      mapElement.style.cursor = isSpawnMode ? 'crosshair' : '';
+    }
+  }
+
+  if (btnSpawn) {
+    btnSpawn.addEventListener('click', () => setSpawnMode(!isSpawnMode));
   }
 
   // Handle map click for dynamic node drop
@@ -319,16 +355,7 @@ mapManager.init().then(map => {
     const { lng, lat } = e.lngLat;
     const node = engine.spawnDynamicNode(lng, lat, { role: 'dongle' });
 
-    // Exit spawn mode
-    isSpawnMode = false;
-    if (btnSpawn) {
-      btnSpawn.classList.remove('active');
-      btnSpawn.innerHTML = '<span>📍</span> Drop Survivor Node';
-      btnSpawn.style.background = 'rgba(0, 240, 255, 0.12)';
-      btnSpawn.style.borderColor = '#00f0ff';
-      btnSpawn.style.color = '#00f0ff';
-    }
-    if (mapElement) mapElement.style.cursor = '';
+    setSpawnMode(false);
 
     // Log tactical drop
     if (logFeed) {
@@ -350,17 +377,26 @@ mapManager.init().then(map => {
     }, 120);
   });
 
-  // ─── Bottom Timeline Bar ───────────────────────────────────────────────────
-  injectTimelineBar();
+  // ─── Bottom Timeline & Sandbox Bars DOM Injection ─────────────────────────
+  injectBottomBars();
 
   const timelineSlider = document.getElementById('tl-slider');
   const timeClock      = document.getElementById('tl-clock');
   const playBtn        = document.getElementById('tl-play');
+  const headerPlayBtn  = document.getElementById('btn-header-play');
   const speedBtns      = document.querySelectorAll('.tl-speed-btn');
   let isScrubbing = false;
 
   function updatePlayBtn() {
-    if (playBtn) playBtn.textContent = engine.isPlaying ? '⏸' : '▶';
+    const isPlaying = engine.isPlaying;
+    if (playBtn) playBtn.textContent = isPlaying ? '⏸' : '▶';
+    if (headerPlayBtn) {
+      headerPlayBtn.classList.toggle('playing', isPlaying);
+      const icon = headerPlayBtn.querySelector('.header-play-icon');
+      const label = headerPlayBtn.querySelector('.header-play-label');
+      if (icon) icon.textContent = isPlaying ? '⏸' : '▶';
+      if (label) label.textContent = isPlaying ? 'Pause Simulation' : 'Start Simulation';
+    }
   }
 
   function updateTimeline(state) {
@@ -388,12 +424,50 @@ mapManager.init().then(map => {
     });
   }
 
+  if (headerPlayBtn) {
+    headerPlayBtn.addEventListener('click', () => {
+      if (activeMode === 'sandbox') {
+        setMode('replay');
+      }
+      if (engine.isPlaying) {
+        engine.pause();
+      } else {
+        engine.play();
+      }
+      updatePlayBtn();
+    });
+  }
+
   speedBtns.forEach(btn => {
     btn.addEventListener('click', () => {
       speedBtns.forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       engine.setSpeed(parseFloat(btn.dataset.speed));
     });
+  });
+
+  // ─── Tactical Sandbox Bar Tool Actions ────────────────────────────────────
+  document.getElementById('sb-drop-node')?.addEventListener('click', () => {
+    setSpawnMode(!isSpawnMode);
+  });
+
+  document.getElementById('sb-kill-node')?.addEventListener('click', () => {
+    engine.killNextNode();
+  });
+
+  document.getElementById('sb-drone')?.addEventListener('click', () => {
+    engine.deployAerial('drone');
+  });
+
+  document.getElementById('sb-balloon')?.addEventListener('click', () => {
+    engine.deployAerial('balloon');
+  });
+
+  document.getElementById('sb-reset')?.addEventListener('click', () => {
+    engine.restart();
+    engine.clearDynamicNodes();
+    engine.pause();
+    updatePlayBtn();
   });
 
   // ─── Phase Dots Direct Navigation ──────────────────────────────────────────
@@ -415,6 +489,7 @@ mapManager.init().then(map => {
 
     if (e.code === 'Space') {
       e.preventDefault();
+      if (activeMode === 'sandbox') setMode('replay');
       if (engine.isPlaying) engine.pause(); else engine.play();
       updatePlayBtn();
     } else if (e.key === 'k' || e.key === 'K') {
@@ -425,13 +500,21 @@ mapManager.init().then(map => {
       updatePlayBtn();
     } else if (e.key === 'd' || e.key === 'D') {
       // Jump to Drones launch (t=54s)
-      engine.seek(54);
-      engine.play();
+      if (activeMode === 'sandbox') {
+        engine.deployAerial('drone');
+      } else {
+        engine.seek(54);
+        engine.play();
+      }
       updatePlayBtn();
     } else if (e.key === 'b' || e.key === 'B') {
       // Jump to Balloons rise (t=66s)
-      engine.seek(66);
-      engine.play();
+      if (activeMode === 'sandbox') {
+        engine.deployAerial('balloon');
+      } else {
+        engine.seek(66);
+        engine.play();
+      }
       updatePlayBtn();
     } else if (e.key === 'm' || e.key === 'M') {
       // Toggle With/Without Mesh
@@ -461,38 +544,65 @@ mapManager.init().then(map => {
   engine.on('play_state', updatePlayBtn);
 });
 
-// ─── Inject the bottom Timeline Bar DOM ────────────────────────────────────────
-function injectTimelineBar() {
-  if (document.getElementById('timeline-bar')) return;
-
-  const bar = document.createElement('div');
-  bar.id = 'timeline-bar';
-  bar.innerHTML = `
-    <div class="tl-left">
-      <button id="tl-play" class="tl-play-btn" title="Play / Pause (Space)">▶</button>
-      <span id="tl-clock" class="tl-clock">Fri 27 Sep, 22:00</span>
-    </div>
-    <div class="tl-center">
-      <div class="tl-phase-dots">
-        <span class="tl-phase-dot" style="left:0%"    title="P1: Rain begins (t=0s)">P1</span>
-        <span class="tl-phase-dot" style="left:6%"    title="P2: Cell Towers DOWN (t=6s)">P2</span>
-        <span class="tl-phase-dot" style="left:54%"   title="P3: Drones launch (t=54s)">P3</span>
-        <span class="tl-phase-dot" style="left:66%"   title="P4: Balloons rise (t=66s)">P4</span>
-        <span class="tl-phase-dot" style="left:78%"   title="P5: Handoff complete (t=78s)">P5</span>
-      </div>
-      <input type="range" id="tl-slider" class="tl-slider" min="0" max="1000" value="0" step="1">
-    </div>
-    <div class="tl-right">
-      <button class="tl-speed-btn active" data-speed="0.5">0.5×</button>
-      <button class="tl-speed-btn active" data-speed="1" style="opacity:1;font-weight:700">1×</button>
-      <button class="tl-speed-btn" data-speed="2">2×</button>
-    </div>
-  `;
-
+// ─── Inject Bottom Bars: Incident Timeline & Tactical Sandbox ───────────────
+function injectBottomBars() {
   const viewport = document.getElementById('map-viewport');
-  if (viewport) viewport.appendChild(bar);
+  if (!viewport) return;
 
-  // Set 1× as default active
-  bar.querySelectorAll('.tl-speed-btn').forEach(b => b.classList.remove('active'));
-  bar.querySelector('[data-speed="1"]').classList.add('active');
+  if (!document.getElementById('timeline-bar')) {
+    const bar = document.createElement('div');
+    bar.id = 'timeline-bar';
+    bar.innerHTML = `
+      <div class="tl-left">
+        <button id="tl-play" class="tl-play-btn" title="Play / Pause (Space)">▶</button>
+        <span id="tl-clock" class="tl-clock">Fri 27 Sep, 22:00</span>
+      </div>
+      <div class="tl-center">
+        <div class="tl-phase-dots">
+          <span class="tl-phase-dot" style="left:0%"    title="P1: Rain begins (t=0s)">P1</span>
+          <span class="tl-phase-dot" style="left:6%"    title="P2: Cell Towers DOWN (t=6s)">P2</span>
+          <span class="tl-phase-dot" style="left:54%"   title="P3: Drones launch (t=54s)">P3</span>
+          <span class="tl-phase-dot" style="left:66%"   title="P4: Balloons rise (t=66s)">P4</span>
+          <span class="tl-phase-dot" style="left:78%"   title="P5: Handoff complete (t=78s)">P5</span>
+        </div>
+        <input type="range" id="tl-slider" class="tl-slider" min="0" max="1000" value="0" step="1">
+      </div>
+      <div class="tl-right">
+        <button class="tl-speed-btn" data-speed="0.5">0.5×</button>
+        <button class="tl-speed-btn active" data-speed="1" style="opacity:1;font-weight:700">1×</button>
+        <button class="tl-speed-btn" data-speed="2">2×</button>
+      </div>
+    `;
+    viewport.appendChild(bar);
+  }
+
+  if (!document.getElementById('sandbox-bar')) {
+    const sb = document.createElement('div');
+    sb.id = 'sandbox-bar';
+    sb.className = 'hidden';
+    sb.innerHTML = `
+      <div class="sandbox-left">
+        <span class="sandbox-badge">TACTICAL SANDBOX</span>
+        <span class="sandbox-hint">Interactive Mode: Drop survivors or submerge relays to test dynamic routing</span>
+      </div>
+      <div class="sandbox-tools">
+        <button class="sb-tool-btn" id="sb-drop-node" title="Click anywhere on the map to drop a survivor node">
+          <span>📍</span> Drop Survivor
+        </button>
+        <button class="sb-tool-btn" id="sb-kill-node" title="Submerge next relay under rising water">
+          <span>🌊</span> Submerge Relay
+        </button>
+        <button class="sb-tool-btn" id="sb-drone" title="Dispatch aerial drone relay to link isolated nodes">
+          <span>🚁</span> Deploy Drone
+        </button>
+        <button class="sb-tool-btn" id="sb-balloon" title="Deploy high-altitude balloon aerostat relay">
+          <span>🎈</span> Deploy Balloon
+        </button>
+        <button class="sb-tool-btn" id="sb-reset" title="Clear dynamic nodes & reset network">
+          <span>↺</span> Reset Sandbox
+        </button>
+      </div>
+    `;
+    viewport.appendChild(sb);
+  }
 }

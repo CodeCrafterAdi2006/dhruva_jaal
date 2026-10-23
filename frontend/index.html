@@ -40,8 +40,24 @@
           <span class="badge-scenario" id="source-badge">Scenario</span>
         </div>
 
-        <div class="header-event-title">
-          Kathmandu Valley Floods, 27–29 Sep 2024
+        <div class="header-center-controls">
+          <!-- Mode Switcher -->
+          <div class="mode-switch-group">
+            <button class="mode-btn active" id="btn-mode-replay" title="100-Second Scripted Disaster Story">
+              <span class="mode-icon">🎬</span>
+              <span>Incident Replay</span>
+            </button>
+            <button class="mode-btn" id="btn-mode-sandbox" title="Live Interactive Disaster Sandbox & Stress-Test">
+              <span class="mode-icon">🕹️</span>
+              <span>Tactical Sandbox</span>
+            </button>
+          </div>
+
+          <!-- Primary Start / Pause Simulation Button -->
+          <button class="header-play-btn" id="btn-header-play" title="Start / Pause Simulation (Space)">
+            <span class="header-play-icon">▶</span>
+            <span class="header-play-label">Start Simulation</span>
+          </button>
         </div>
 
         <div class="header-actions">
@@ -121,114 +137,67 @@
         </div>
       </div>
 
-      <!-- Bottom-Left 3D Tactical Compass -->
-      <div class="compass-widget" id="compass-widget">
-        <div class="compass-dial" id="compass-dial">
-          <span class="compass-dir n">N</span>
-          <span class="compass-dir e">E</span>
-          <span class="compass-dir s">S</span>
-          <span class="compass-dir w">W</span>
-          <div class="compass-needle"></div>
-        </div>
-      </div>
+      <!-- Compass removed to ensure unobstructed controls and zero clutter -->
     </main>
 
     <!-- Right: 20% Telemetry Sidebar -->
+    <!-- Right: 22% Telemetry Sidebar -->
     <aside id="sidebar">
-      <!-- Section 1: Message Log -->
+      <!-- Section 1: Base Camp Inbox (HQ Message Dispatch - Top Priority) -->
+      <section class="sidebar-section inbox-section">
+        <div class="section-header">
+          <div class="section-title-wrap">
+            <span class="section-title">📥 BASE CAMP INBOX</span>
+          </div>
+          <span class="status-live" id="inbox-count">0 DELIVERED</span>
+        </div>
+        <div class="inbox-container" id="inbox-list">
+          <div class="inbox-empty">
+            <div class="inbox-waiting-pulse"></div>
+            <div>Awaiting incoming mesh dispatches...</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Section 2: Real-Time Incident & Packet Log -->
       <section class="sidebar-section">
         <div class="section-header">
-          <span class="section-title">MESSAGE LOG</span>
+          <div class="section-title-wrap">
+            <span class="section-title">📡 MESSAGE &amp; EVENT LOG</span>
+          </div>
           <span class="status-live">● LIVE</span>
         </div>
         <div class="log-container" id="log-feed">
-          <div class="log-item">
-            <div class="log-meta">
-              <span class="log-time">14:32:17</span>
-              <span class="log-tag state-stored">STORED</span>
-            </div>
-            <div class="log-detail">From DONGLE (Node 1) · 64 B</div>
-          </div>
-          <div class="log-item">
-            <div class="log-meta">
-              <span class="log-time">14:32:22</span>
-              <span class="log-tag state-transit">SENT_TO_MESH</span>
-            </div>
-            <div class="log-detail">Via Node 1 → 3 → 5 → 7 → 8</div>
-          </div>
-          <div class="log-item">
-            <div class="log-meta">
-              <span class="log-time">14:32:31</span>
-              <span class="log-tag state-delivered">DELIVERED</span>
-            </div>
-            <div class="log-detail">To HELPER (Node 8) · Hop Count: 5</div>
-          </div>
         </div>
       </section>
 
-      <!-- Section 2: Live Nodes RSSI -->
+      <!-- Section 3: Live Nodes RSSI (Fixed layout, no text overlap) -->
       <section class="sidebar-section">
         <div class="section-header">
-          <span class="section-title">SECTOR 4 TACTICAL CORRIDOR</span>
-          <span class="section-count">8 NODES</span>
+          <div class="section-title-wrap">
+            <span class="section-title" id="sector-title">SECTOR 4 TACTICAL CORRIDOR</span>
+          </div>
+          <span class="section-count" id="nodes-count">8 NODES</span>
         </div>
         <div class="nodes-list" id="nodes-list">
-          <div class="node-row">
-            <span class="node-name dongle">Node 1 (DONGLE)</span>
-            <div class="meter-track"><div class="meter-fill strong" style="width: 82%"></div></div>
-            <span class="node-val">-68 dBm</span>
-          </div>
-          <div class="node-row">
-            <span class="node-name relay">Node 2 (RELAY)</span>
-            <div class="meter-track"><div class="meter-fill strong" style="width: 75%"></div></div>
-            <span class="node-val">-72 dBm</span>
-          </div>
-          <div class="node-row">
-            <span class="node-name relay">Node 3 (RELAY)</span>
-            <div class="meter-track"><div class="meter-fill medium" style="width: 65%"></div></div>
-            <span class="node-val">-78 dBm</span>
-          </div>
-          <div class="node-row">
-            <span class="node-name relay">Node 4 (RELAY)</span>
-            <div class="meter-track"><div class="meter-fill medium" style="width: 50%"></div></div>
-            <span class="node-val">-87 dBm</span>
-          </div>
-          <div class="node-row">
-            <span class="node-name relay">Node 5 (RELAY)</span>
-            <div class="meter-track"><div class="meter-fill medium" style="width: 58%"></div></div>
-            <span class="node-val">-82 dBm</span>
-          </div>
-          <div class="node-row">
-            <span class="node-name relay">Node 6 (RELAY)</span>
-            <div class="meter-track"><div class="meter-fill strong" style="width: 70%"></div></div>
-            <span class="node-val">-76 dBm</span>
-          </div>
-          <div class="node-row">
-            <span class="node-name relay">Node 7 (RELAY)</span>
-            <div class="meter-track"><div class="meter-fill strong" style="width: 78%"></div></div>
-            <span class="node-val">-70 dBm</span>
-          </div>
-          <div class="node-row">
-            <span class="node-name helper">Node 8 (HELPER)</span>
-            <div class="meter-track"><div class="meter-fill strong" style="width: 80%"></div></div>
-            <span class="node-val">-69 dBm</span>
-          </div>
         </div>
       </section>
 
-      <!-- Section 3: Network Stats -->
+      <!-- Section 4: Network Stats -->
       <section class="sidebar-section">
         <div class="section-header">
-          <span class="section-title">NETWORK STATS</span>
+          <div class="section-title-wrap">
+            <span class="section-title">📊 NETWORK TELEMETRY</span>
+          </div>
         </div>
         <div class="stats-grid">
           <div class="stat-box">
             <span class="stat-label">HOP COUNT</span>
-            <span class="stat-value" id="stat-hops">5</span>
+            <span class="stat-value" id="stat-hops">—</span>
           </div>
           <div class="stat-box">
             <span class="stat-label">SUCCESS RATE</span>
-            <span class="stat-value" id="stat-rate">98.7%</span>
+            <span class="stat-value" id="stat-rate">100%</span>
           </div>
           <div class="stat-box">
             <span class="stat-label">AVG. RSSI</span>
@@ -241,22 +210,8 @@
         </div>
       </section>
 
-      <!-- Section 4: Base Camp Inbox (HQ Message Dispatch) -->
-      <section class="sidebar-section inbox-section">
-        <div class="section-header">
-          <span class="section-title">BASE CAMP INBOX</span>
-          <span class="status-live" id="inbox-count">0 DELIVERED</span>
-        </div>
-        <div class="inbox-container" id="inbox-list">
-          <div class="inbox-empty">
-            <div class="inbox-waiting-pulse"></div>
-            <div>Awaiting incoming mesh dispatches...</div>
-          </div>
-        </div>
-      </section>
-
       <!-- Section 5: Action Controls -->
-      <section class="sidebar-section actions">
+      <section class="sidebar-section actions" id="sidebar-actions">
         <button class="btn btn-primary" id="btn-simulate">
           <span>⚡</span> Simulate Disaster
         </button>

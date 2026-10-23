@@ -20,6 +20,7 @@ export class ScenarioEngine extends DataSource {
 
     // Manual overrides for interactive judge Q&A (Simulate Disaster / Keyboard shortcuts)
     this.manualKilledNodes = new Set();
+    this.manualAerialDeployed = new Set();
     this.manualAerialTrigger = null; // 'drones' | 'balloons'
 
     // Dynamic Survivor & Relay Node Injection (Interactive Sandbox)
@@ -77,6 +78,7 @@ export class ScenarioEngine extends DataSource {
   restart() {
     this.pause();
     this.manualKilledNodes.clear();
+    this.manualAerialDeployed.clear();
     this.manualAerialTrigger = null;
     this.dynamicSosList = [];
     this.seek(0);
@@ -102,6 +104,31 @@ export class ScenarioEngine extends DataSource {
       return nextTarget;
     }
     return null;
+  }
+
+  /**
+   * Tactical Sandbox: Deploy Airborne Drone or Balloon Relay on demand
+   */
+  deployAerial(type = 'drone') {
+    const ids = type === 'drone' ? ['DR1', 'DR2'] : ['BL1', 'BL2'];
+    ids.forEach(id => {
+      this.manualAerialDeployed.add(id);
+    });
+    this.emit('aerial', {
+      type: type === 'drone' ? 'drones_launch' : 'balloons_launch',
+      ids,
+      simClock: 'SANDBOX DISPATCH'
+    });
+    setTimeout(() => {
+      this.emit('aerial', {
+        type: type === 'drone' ? 'drones_online' : 'balloons_online',
+        ids,
+        simClock: 'SANDBOX ACTIVE'
+      });
+    }, 700);
+    const updatedState = this.reconstructStateAt(this.currentTime);
+    this.emit('state_update', updatedState);
+    return ids;
   }
 
   /**
@@ -702,6 +729,15 @@ export class ScenarioEngine extends DataSource {
       if (activeNodes.has(id)) {
         activeNodes.get(id).status = 'down';
         activeNodes.get(id).reason = 'Manual disaster trigger';
+      }
+    });
+
+    // Apply manual aerial deployments (Tactical Sandbox)
+    this.manualAerialDeployed.forEach(id => {
+      if (activeNodes.has(id)) {
+        activeNodes.get(id).visible = true;
+        activeNodes.get(id).status = 'online';
+        activeNodes.get(id).flightProgress = 1;
       }
     });
 
