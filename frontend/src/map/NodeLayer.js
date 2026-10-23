@@ -275,12 +275,12 @@ export class NodeLayer {
 
         if (isAck) {
           element.classList.add('online', 'acknowledged');
-          if (labelEl) labelEl.textContent = data.role === 'dongle' || data.isDynamic ? `🔴 SURVIVOR · ${data.id}` : data.id;
-          if (subEl) subEl.innerHTML = `<span style="color:#10b981;font-weight:700">✅ RESCUE CONFIRMED</span>`;
+          if (labelEl) labelEl.textContent = data.role === 'dongle' || data.isDynamic ? `SURVIVOR · ${data.id}` : data.id;
+          if (subEl) subEl.innerHTML = `<span style="color:#10b981;font-weight:700">RESCUE CONFIRMED</span>`;
         } else if (isHoldingSos) {
           element.classList.add('online', 'waiting-for-mesh');
-          if (labelEl) labelEl.textContent = data.role === 'dongle' || data.isDynamic ? `🔴 SURVIVOR · ${data.id}` : `${nodeState.id} · STORED`;
-          if (subEl) subEl.innerHTML = `<span class="stored-text">⏳ Stored · Retrying beacon</span>`;
+          if (labelEl) labelEl.textContent = data.role === 'dongle' || data.isDynamic ? `SURVIVOR · ${data.id}` : `${nodeState.id} · STORED`;
+          if (subEl) subEl.innerHTML = `<span class="stored-text">Stored · Retrying beacon</span>`;
         } else if (isOnline) {
           element.classList.add('online');
           const info = this.getNodeDisplayInfo(data, true, false, false);
@@ -288,7 +288,7 @@ export class NodeLayer {
           if (subEl) subEl.textContent = info.sub;
         } else {
           element.classList.add('down');
-          if (labelEl) labelEl.textContent = `⚠ ${data.id} DOWN`;
+          if (labelEl) labelEl.textContent = `${data.id} DOWN`;
           if (subEl) subEl.innerHTML = `<span class="down-text">Submerged in flood</span>`;
         }
       });
@@ -547,7 +547,7 @@ export class NodeLayer {
 
       return `
         <div class="popup-header">
-          <div class="popup-badge" style="background:rgba(239,68,68,0.25);color:#ef4444;border:1px solid #ef4444">🔴 SURVIVOR DONGLE</div>
+          <div class="popup-badge" style="background:rgba(239,68,68,0.25);color:#ef4444;border:1px solid #ef4444">SURVIVOR DONGLE</div>
           <div class="popup-title">${dynamicNode.label}</div>
           <button class="popup-close-btn" title="Close">✕</button>
         </div>
@@ -559,7 +559,7 @@ export class NodeLayer {
           <div class="popup-row">
             <span class="popup-label">STATUS</span>
             <span class="popup-val" style="color:${isAck ? '#10b981' : '#ef4444'};font-weight:700;">
-              ${isAck ? '✅ ACK RECEIVED · Rescue Confirmed' : '🚨 DISTRESS BEACON ACTIVE'}
+              ${isAck ? 'ACK RECEIVED · Rescue Confirmed' : 'DISTRESS BEACON ACTIVE'}
             </span>
           </div>
           <div class="popup-row">

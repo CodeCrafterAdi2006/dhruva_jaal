@@ -97,7 +97,7 @@ mapManager.init().then(map => {
       nodesList.innerHTML = '';
       const groundNodes = state.nodes.filter(n =>
         ['dongle','relay','helper'].includes(n.role) &&
-        !['DR1','DR2','BL1','BL2'].includes(n.id)
+        !['DR1','DR2','DR3','DR4','BL1','BL2'].includes(n.id)
       );
       const aerials = state.nodes.filter(n =>
         (n.role === 'drone' || n.role === 'balloon') && n.visible

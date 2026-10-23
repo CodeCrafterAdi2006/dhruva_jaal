@@ -110,7 +110,7 @@ export class ScenarioEngine extends DataSource {
    * Tactical Sandbox: Deploy Airborne Drone or Balloon Relay on demand
    */
   deployAerial(type = 'drone') {
-    const ids = type === 'drone' ? ['DR1', 'DR2'] : ['BL1', 'BL2'];
+    const ids = type === 'drone' ? ['DR1', 'DR2', 'DR3', 'DR4'] : ['BL1', 'BL2'];
     ids.forEach(id => {
       this.manualAerialDeployed.add(id);
     });
@@ -255,7 +255,8 @@ export class ScenarioEngine extends DataSource {
   checkSurvivorBeacons() {
     const now = performance.now();
     this.survivorBeacons.forEach(survivor => {
-      if (survivor.isAcknowledged) return;
+      // N1 is controlled deterministically by scenario timeline; skip in background loop
+      if (survivor.id === 'N1' || survivor.isAcknowledged) return;
 
       const elapsed = (now - survivor.lastBeaconTimestamp) / 1000;
       if (survivor.lastBeaconTimestamp === 0 || elapsed >= survivor.beaconIntervalSeconds) {
@@ -707,7 +708,7 @@ export class ScenarioEngine extends DataSource {
 
     // Drone Low-Battery Warning (t=74s to t=83s) before recall
     if (this.withMesh) {
-      ['DR1', 'DR2'].forEach(id => {
+      ['DR1', 'DR2', 'DR3', 'DR4'].forEach(id => {
         if (activeNodes.has(id) && t >= 74 && t <= 83) {
           activeNodes.get(id).batteryStatus = 'LOW (illustrative — returning to base)';
         }
@@ -752,12 +753,28 @@ export class ScenarioEngine extends DataSource {
       });
     });
 
-    // Also update N1 with its survivor beacon status
-    const n1Beacon = this.survivorBeacons.get('N1');
-    if (activeNodes.has('N1') && n1Beacon) {
-      activeNodes.get('N1').isAcknowledged = Boolean(n1Beacon.isAcknowledged);
-      activeNodes.get('N1').storedInFlash = Boolean(n1Beacon.storedInFlash);
-      activeNodes.get('N1').beaconAttempts = n1Beacon.beaconAttempts || 0;
+    // N1 survivor distress cycles across timeline parts:
+    // - t < 14: Active distress before SOS1 (RED)
+    // - 14 <= t < 22: SOS1 confirmed (GREEN)
+    // - 22 <= t < 32: N3 floods & Part transition -> N1 returns to RED distress!
+    // - 32 <= t < 40: SOS2 confirmed via alternate route (GREEN)
+    // - 40 <= t < 91: N6 floods & Parts 3-5 transition -> N1 returns to RED distress!
+    // - t >= 91: SOS4 confirmed via balloon backbone (GREEN)
+    if (activeNodes.has('N1')) {
+      let isN1Ack = false;
+      if (this.withMesh) {
+        if (t >= 14 && t < 22) {
+          isN1Ack = true;
+        } else if (t >= 32 && t < 40) {
+          isN1Ack = true;
+        } else if (t >= 91) {
+          isN1Ack = true;
+        }
+      }
+      activeNodes.get('N1').isAcknowledged = isN1Ack;
+      const n1Beacon = this.survivorBeacons.get('N1');
+      activeNodes.get('N1').storedInFlash = Boolean(n1Beacon?.storedInFlash);
+      activeNodes.get('N1').beaconAttempts = n1Beacon?.beaconAttempts || 0;
     }
 
     // Compute active edges for Map and Sidebar (static edges + dynamic edges)
