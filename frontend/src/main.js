@@ -109,23 +109,33 @@ mapManager.init().then(map => {
         const dbm  = n.status === 'online' ? Math.round(raw + jitter) : null;
         const cls  = dbm !== null ? rssiToClass(dbm) : 'offline';
         const w    = dbm !== null ? rssiToWidth(dbm) : 5;
-        let label = `${n.id} (RELAY)`;
+        let rolePrefix = 'relay';
+        let roleName = 'Relay';
+        let detail = n.sublabel || n.place?.split(' ')?.[0] || 'Community';
         if (n.role === 'dongle' || n.isDynamic) {
-          label = `🔴 ${n.id} · Survivor (${n.sublabel || 'Stranded'})`;
+          rolePrefix = 'survivor';
+          roleName = 'Survivor';
+          detail = n.sublabel || 'Stranded';
         } else if (n.role === 'helper') {
-          label = `🟢 ${n.id} · Base Camp HQ (Safe Ground)`;
+          rolePrefix = 'base';
+          roleName = 'Base Camp';
+          detail = 'Safe Ground HQ';
         } else if (n.role === 'drone') {
-          label = `🚁 ${n.id} · Drone (80m Relay)`;
+          rolePrefix = 'drone';
+          roleName = 'Drone';
+          detail = '80m Relay';
         } else if (n.role === 'balloon') {
-          label = `🎈 ${n.id} · Balloon (100m Aerostat)`;
-        } else {
-          label = `🔵 ${n.id} · Relay (${n.sublabel || n.place?.split(' ')?.[0] || 'Community'})`;
+          rolePrefix = 'balloon';
+          roleName = 'Balloon';
+          detail = '100m Aerostat';
         }
+        const labelHtml = `<span class="badge-dot dot-${rolePrefix}"></span><span class="node-id-tag">${n.id}</span> · ${roleName} (${detail})`;
+        const titleStr = `${n.id} · ${roleName} (${detail})`;
         const valStr = dbm !== null ? `${dbm} dBm` : '— OFFLINE';
         nodesList.innerHTML += `
           <div class="node-row ${n.status !== 'online' ? 'node-row-down' : ''}">
             <div class="node-row-header">
-              <span class="node-name ${n.role}" title="${label}">${label}</span>
+              <span class="node-name ${n.role}" title="${titleStr}">${labelHtml}</span>
               <span class="node-val">${valStr}</span>
             </div>
             <div class="meter-track"><div class="meter-fill ${cls}" style="width:${w}%"></div></div>
@@ -182,7 +192,7 @@ mapManager.init().then(map => {
           <span class="log-time">TWO-WAY ACK</span>
           <span class="log-tag state-delivered" style="background:#10b981;color:#0b1220;font-weight:900">CONFIRMED</span>
         </div>
-        <div class="log-detail" style="color:#10b981;font-weight:700">✅ ${evt.nodeId} received Base Camp Rescue ACK! Boat en route.</div>
+        <div class="log-detail" style="color:#10b981;font-weight:700">[ACK] ${evt.nodeId} received Base Camp Rescue ACK! Boat en route.</div>
       `;
       logFeed.prepend(item);
       while (logFeed.children.length > 8) logFeed.removeChild(logFeed.lastChild);
@@ -198,7 +208,7 @@ mapManager.init().then(map => {
           <span class="log-time">STORE & FWD</span>
           <span class="log-tag state-stored">FLASH HOLD</span>
         </div>
-        <div class="log-detail" style="color:#f5b942">⏳ Survivor ${evt.survivor.id} isolated · Held in flash (retrying every 16s)</div>
+        <div class="log-detail" style="color:#f5b942">[HOLD] Survivor ${evt.survivor.id} isolated · Held in flash (retrying every 16s)</div>
       `;
       logFeed.prepend(item);
       while (logFeed.children.length > 8) logFeed.removeChild(logFeed.lastChild);
@@ -214,7 +224,7 @@ mapManager.init().then(map => {
           <span class="log-time">${evt.simClock || 'ALERT'}</span>
           <span class="log-tag state-failed">DOWN</span>
         </div>
-        <div class="log-detail" style="color:#ff6b6b">⚠ Node ${evt.id} DOWN · ${evt.reason || 'Flooded'}</div>
+        <div class="log-detail" style="color:#ff6b6b">[ALERT] Node ${evt.id} DOWN · ${evt.reason || 'Flooded'}</div>
       `;
       logFeed.prepend(item);
       while (logFeed.children.length > 8) logFeed.removeChild(logFeed.lastChild);
@@ -231,7 +241,7 @@ mapManager.init().then(map => {
           <span class="log-time">${evt.simClock || 'DISPATCH'}</span>
           <span class="log-tag" style="background:#00f0ff22;color:#00f0ff;border:1px solid #00f0ff">SCRAMBLE</span>
         </div>
-        <div class="log-detail" style="color:#00f0ff">🚁 Base Camp scrambled ${evt.ids.join(', ')} to flooded sector</div>
+        <div class="log-detail" style="color:#00f0ff">[DISPATCH] Base Camp scrambled ${evt.ids.join(', ')} to flooded sector</div>
       `;
       logFeed.prepend(item);
       while (logFeed.children.length > 8) logFeed.removeChild(logFeed.lastChild);
@@ -243,7 +253,7 @@ mapManager.init().then(map => {
           <span class="log-time">${evt.simClock || 'ACTIVE'}</span>
           <span class="log-tag" style="background:#00f0ff22;color:#00f0ff;border:1px solid #00f0ff">AERIAL LOCK</span>
         </div>
-        <div class="log-detail" style="color:#00f0ff">🔒 ${evt.ids.join(', ')} hovering at 80m · Grid relay active!</div>
+        <div class="log-detail" style="color:#00f0ff">[ACTIVE] ${evt.ids.join(', ')} hovering at 80m · Grid relay active!</div>
       `;
       logFeed.prepend(item);
       while (logFeed.children.length > 8) logFeed.removeChild(logFeed.lastChild);
@@ -303,7 +313,6 @@ mapManager.init().then(map => {
   if (btnSandbox) btnSandbox.addEventListener('click', () => setMode('sandbox'));
 
   // ─── Sidebar Action Buttons ────────────────────────────────────────────────
-  document.getElementById('btn-simulate')?.addEventListener('click', () => engine.killNextNode());
   document.getElementById('btn-reset')?.addEventListener('click', () => {
     engine.restart();
     engine.clearDynamicNodes();
@@ -323,12 +332,12 @@ mapManager.init().then(map => {
     if (btnSpawn) {
       btnSpawn.classList.toggle('active', isSpawnMode);
       if (isSpawnMode) {
-        btnSpawn.innerHTML = '<span>✕</span> Click Map to Drop';
+        btnSpawn.innerHTML = 'Cancel Drop';
         btnSpawn.style.background = 'rgba(255, 59, 59, 0.2)';
         btnSpawn.style.borderColor = '#ff3b3b';
         btnSpawn.style.color = '#ff3b3b';
       } else {
-        btnSpawn.innerHTML = '<span>📍</span> Drop Survivor Node';
+        btnSpawn.innerHTML = 'Drop Survivor Node';
         btnSpawn.style.background = 'rgba(0, 240, 255, 0.12)';
         btnSpawn.style.borderColor = '#00f0ff';
         btnSpawn.style.color = '#00f0ff';
@@ -337,7 +346,7 @@ mapManager.init().then(map => {
 
     if (sbDropBtn) {
       sbDropBtn.classList.toggle('active', isSpawnMode);
-      sbDropBtn.innerHTML = isSpawnMode ? '<span>✕</span> Cancel Drop' : '<span>📍</span> Drop Survivor';
+      sbDropBtn.innerHTML = isSpawnMode ? 'Cancel Drop' : 'Drop Survivor';
     }
 
     if (mapElement) {
@@ -366,7 +375,7 @@ mapManager.init().then(map => {
           <span class="log-time">MANUAL</span>
           <span class="log-tag" style="background:#00f0ff22;color:#00f0ff;border:1px solid #00f0ff">DEPLOY</span>
         </div>
-        <div class="log-detail" style="color:#00f0ff">📍 Dropped ${node.label} at (${lat.toFixed(3)}, ${lng.toFixed(3)})</div>
+        <div class="log-detail" style="color:#00f0ff">[DEPLOY] Dropped ${node.label} at (${lat.toFixed(3)}, ${lng.toFixed(3)})</div>
       `;
       logFeed.prepend(item);
     }
@@ -587,19 +596,19 @@ function injectBottomBars() {
       </div>
       <div class="sandbox-tools">
         <button class="sb-tool-btn" id="sb-drop-node" title="Click anywhere on the map to drop a survivor node">
-          <span>📍</span> Drop Survivor
+          Drop Survivor
         </button>
         <button class="sb-tool-btn" id="sb-kill-node" title="Submerge next relay under rising water">
-          <span>🌊</span> Submerge Relay
+          Submerge Relay
         </button>
         <button class="sb-tool-btn" id="sb-drone" title="Dispatch aerial drone relay to link isolated nodes">
-          <span>🚁</span> Deploy Drone
+          Deploy Drone
         </button>
         <button class="sb-tool-btn" id="sb-balloon" title="Deploy high-altitude balloon aerostat relay">
-          <span>🎈</span> Deploy Balloon
+          Deploy Balloon
         </button>
         <button class="sb-tool-btn" id="sb-reset" title="Clear dynamic nodes & reset network">
-          <span>↺</span> Reset Sandbox
+          Reset Sandbox
         </button>
       </div>
     `;

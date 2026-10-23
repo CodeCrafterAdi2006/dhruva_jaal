@@ -27,7 +27,20 @@ export class LinkPacketLayer {
         data: { type: 'FeatureCollection', features: [] }
       });
 
-      // Bloom glow behind active links
+      // High-contrast dark casing under active links to pop over city terrain & buildings
+      this.map.addLayer({
+        id: 'mesh-links-casing',
+        type: 'line',
+        source: this.linksSourceId,
+        filter: ['==', ['get', 'active'], true],
+        paint: {
+          'line-color': '#030814',
+          'line-width': ['+', ['get', 'coreWidth'], 3.2],
+          'line-opacity': 0.95
+        }
+      });
+
+      // Bloom glow aura behind active links
       this.map.addLayer({
         id: 'mesh-links-glow',
         type: 'line',
@@ -37,11 +50,11 @@ export class LinkPacketLayer {
           'line-color': ['get', 'color'],
           'line-width': ['get', 'glowWidth'],
           'line-opacity': ['get', 'glowOpacity'],
-          'line-blur': 4
+          'line-blur': 5
         }
       });
 
-      // Solid active link
+      // Solid saturated active link beam
       this.map.addLayer({
         id: 'mesh-links-core',
         type: 'line',
@@ -50,7 +63,20 @@ export class LinkPacketLayer {
         paint: {
           'line-color': ['get', 'color'],
           'line-width': ['get', 'coreWidth'],
-          'line-opacity': ['get', 'opacity']
+          'line-opacity': 1.0
+        }
+      });
+
+      // Bright white high-contrast laser core down center of active links
+      this.map.addLayer({
+        id: 'mesh-links-laser',
+        type: 'line',
+        source: this.linksSourceId,
+        filter: ['==', ['get', 'active'], true],
+        paint: {
+          'line-color': '#FFFFFF',
+          'line-width': 1.4,
+          'line-opacity': 0.85
         }
       });
 
@@ -348,23 +374,23 @@ export class LinkPacketLayer {
 
       // Differentiate Ground vs Drone vs Balloon links
       let color = '#2EE66B'; // Strong ground link ≥ −80
-      let coreWidth = 2.4;
-      let glowWidth = 6.5;
-      let glowOpacity = 0.40;
+      let coreWidth = 3.6;
+      let glowWidth = 12.0;
+      let glowOpacity = 0.55;
 
       if (edge.droneLink) {
         color = '#00F0FF'; // Agile Drone aerial link (tactical cyan)
-        coreWidth = 2.6;
-        glowWidth = 8.5;
-        glowOpacity = 0.65;
+        coreWidth = 4.2;
+        glowWidth = 16.0;
+        glowOpacity = 0.85;
       } else if (edge.balloonLink) {
-        color = '#A78BFA'; // Tethered Balloon stratospheric link (tactical violet)
-        coreWidth = 2.8;
-        glowWidth = 9.0;
-        glowOpacity = 0.70;
+        color = '#C084FC'; // Tethered Balloon stratospheric link (tactical vibrant violet)
+        coreWidth = 4.4;
+        glowWidth = 18.0;
+        glowOpacity = 0.90;
       } else {
-        if (liveRssi < -100) color = '#FF3B3B'; // Weak
-        else if (liveRssi < -80) color = '#FFB020'; // Medium
+        if (liveRssi < -100) color = '#F87171'; // Weak
+        else if (liveRssi < -80) color = '#FBBF24'; // Medium
       }
 
       linkFeatures.push({
@@ -374,7 +400,7 @@ export class LinkPacketLayer {
           id: edgeKey,
           active: true,
           color,
-          opacity: 0.95,
+          opacity: 1.0,
           glowOpacity,
           coreWidth,
           glowWidth,

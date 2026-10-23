@@ -44,11 +44,9 @@
           <!-- Mode Switcher -->
           <div class="mode-switch-group">
             <button class="mode-btn active" id="btn-mode-replay" title="100-Second Scripted Disaster Story">
-              <span class="mode-icon">🎬</span>
               <span>Incident Replay</span>
             </button>
             <button class="mode-btn" id="btn-mode-sandbox" title="Live Interactive Disaster Sandbox & Stress-Test">
-              <span class="mode-icon">🕹️</span>
               <span>Tactical Sandbox</span>
             </button>
           </div>
@@ -74,7 +72,7 @@
 
       <!-- Top-Center Alert Banner (Triggered at t=6s) -->
       <div class="alert-banner" id="network-alert-banner">
-        <span class="alert-icon">⚠</span>
+        <span class="alert-tag">ALERT</span>
         <span class="alert-text">Phone network DOWN</span>
       </div>
 
@@ -104,27 +102,27 @@
           <span class="legend-label">Packet flow</span>
         </div>
         <div class="legend-row">
-          <span class="legend-symbol" style="color:#ef4444;font-size:12px;">🔴</span>
+          <span class="legend-dot dot-survivor"></span>
           <span class="legend-label"><strong>Survivor Device</strong> (N1, Dynamic)</span>
         </div>
         <div class="legend-row">
-          <span class="legend-symbol" style="color:#60a5fa;font-size:12px;">🔵</span>
+          <span class="legend-dot dot-relay"></span>
           <span class="legend-label"><strong>Community Relay</strong> (N2–N7 Rooftops)</span>
         </div>
         <div class="legend-row">
-          <span class="legend-symbol" style="color:#4ade80;font-size:12px;">🟢</span>
+          <span class="legend-dot dot-base"></span>
           <span class="legend-label"><strong>Base Camp HQ</strong> (N8 Rescue Post)</span>
         </div>
         <div class="legend-row">
-          <span class="legend-symbol" style="color:#00f0ff;font-size:12px;">🚁</span>
+          <span class="legend-dot dot-drone"></span>
           <span class="legend-label"><strong>Airborne Drone</strong> (80m Relay)</span>
         </div>
         <div class="legend-row">
-          <span class="legend-symbol" style="color:#a78bfa;font-size:12px;">🎈</span>
+          <span class="legend-dot dot-balloon"></span>
           <span class="legend-label"><strong>Tethered Balloon</strong> (100m Aerostat)</span>
         </div>
         <div class="legend-row">
-          <span class="legend-symbol" style="color:#ef4444;font-size:12px;">⚠</span>
+          <span class="legend-dot dot-flooded"></span>
           <span class="legend-label"><strong>Flooded Node</strong> (Submerged)</span>
         </div>
         <div class="legend-row">
@@ -140,14 +138,13 @@
       <!-- Compass removed to ensure unobstructed controls and zero clutter -->
     </main>
 
-    <!-- Right: 20% Telemetry Sidebar -->
     <!-- Right: 22% Telemetry Sidebar -->
     <aside id="sidebar">
       <!-- Section 1: Base Camp Inbox (HQ Message Dispatch - Top Priority) -->
       <section class="sidebar-section inbox-section">
         <div class="section-header">
           <div class="section-title-wrap">
-            <span class="section-title">📥 BASE CAMP INBOX</span>
+            <span class="section-title">BASE CAMP INBOX</span>
           </div>
           <span class="status-live" id="inbox-count">0 DELIVERED</span>
         </div>
@@ -163,7 +160,7 @@
       <section class="sidebar-section">
         <div class="section-header">
           <div class="section-title-wrap">
-            <span class="section-title">📡 MESSAGE &amp; EVENT LOG</span>
+            <span class="section-title">MESSAGE &amp; EVENT LOG</span>
           </div>
           <span class="status-live">● LIVE</span>
         </div>
@@ -187,7 +184,7 @@
       <section class="sidebar-section">
         <div class="section-header">
           <div class="section-title-wrap">
-            <span class="section-title">📊 NETWORK TELEMETRY</span>
+            <span class="section-title">NETWORK TELEMETRY</span>
           </div>
         </div>
         <div class="stats-grid">
@@ -212,14 +209,11 @@
 
       <!-- Section 5: Action Controls -->
       <section class="sidebar-section actions" id="sidebar-actions">
-        <button class="btn btn-primary" id="btn-simulate">
-          <span>⚡</span> Simulate Disaster
-        </button>
-        <button class="btn btn-secondary" id="btn-spawn-node" style="border-color: #00f0ff; color: #00f0ff; background: rgba(0, 240, 255, 0.12);">
-          <span>📍</span> Drop Survivor Node
+        <button class="btn btn-primary" id="btn-spawn-node">
+          Drop Survivor Node
         </button>
         <button class="btn btn-secondary" id="btn-reset">
-          <span>↺</span> Reset Network
+          Reset Network
         </button>
       </section>
     </aside>

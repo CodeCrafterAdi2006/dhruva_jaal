@@ -103,14 +103,14 @@ export class MapManager {
           'source-layer': 'building',
           minzoom: 13,
           paint: {
-            'fill-extrusion-color': '#0d1829',
+            'fill-extrusion-color': '#081220',
             'fill-extrusion-height': [
               'interpolate', ['linear'], ['zoom'],
               13, 0,
-              13.5, ['coalesce', ['get', 'render_height'], ['*', ['coalesce', ['get', 'levels'], 2], 3.5], 8]
+              13.5, ['coalesce', ['get', 'render_height'], ['*', ['coalesce', ['get', 'levels'], 2], 2.8], 6]
             ],
             'fill-extrusion-base': ['coalesce', ['get', 'render_min_height'], 0],
-            'fill-extrusion-opacity': 0.85
+            'fill-extrusion-opacity': 0.28
           }
         }
       ]
