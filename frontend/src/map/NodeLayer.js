@@ -94,10 +94,7 @@ export class NodeLayer {
         iconHtml = `<svg class="node-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M6.3 6.3a8 8 0 0 0 0 11.4M17.7 6.3a8 8 0 0 1 0 11.4"/></svg>`;
       }
 
-      const rssiVal = defaultRssi[node.id] || -75;
-      const displayLabel = node.role === 'dongle' ? 'DONGLE' : (node.role === 'helper' ? 'BASE CAMP' : node.id);
-      const displaySub = node.role === 'helper' ? 'Safe ground' : `${rssiVal} dBm`;
-
+      const info = this.getNodeDisplayInfo(node, true, false, false);
       el.title = `${node.id} (${node.label}) · ${node.place}`;
 
       el.innerHTML = `
@@ -110,8 +107,8 @@ export class NodeLayer {
           </div>
         </div>
         <div class="node-tag">
-          <div class="node-label">${displayLabel}</div>
-          <div class="node-sub">${displaySub}</div>
+          <div class="node-label">${info.primary}</div>
+          <div class="node-sub">${info.sub}</div>
         </div>
       `;
 
@@ -266,37 +263,33 @@ export class NodeLayer {
 
         const { element, data } = markerObj;
         const isOnline = nodeState.status === 'online';
-
-        // Check if this node is currently holding an SOS packet in Store-and-Forward
-        const isHoldingSos = state.sosStates?.some(
+        const isAck = Boolean(nodeState.isAcknowledged);
+        const isHoldingSos = Boolean(nodeState.storedInFlash) || state.sosStates?.some(
           s => s.from === nodeState.id && s.state === 'STORED'
         );
 
         const labelEl = element.querySelector('.node-label');
         const subEl = element.querySelector('.node-sub');
 
-        if (isHoldingSos) {
-          element.classList.remove('down');
+        element.classList.remove('down', 'waiting-for-mesh', 'acknowledged');
+
+        if (isAck) {
+          element.classList.add('online', 'acknowledged');
+          if (labelEl) labelEl.textContent = data.role === 'dongle' || data.isDynamic ? `🔴 SURVIVOR · ${data.id}` : data.id;
+          if (subEl) subEl.innerHTML = `<span style="color:#10b981;font-weight:700">✅ RESCUE CONFIRMED</span>`;
+        } else if (isHoldingSos) {
           element.classList.add('online', 'waiting-for-mesh');
-          if (labelEl) labelEl.textContent = `${nodeState.id} · STORED`;
-          if (subEl) subEl.innerHTML = `<span class="stored-text">Waiting for mesh...</span>`;
+          if (labelEl) labelEl.textContent = data.role === 'dongle' || data.isDynamic ? `🔴 SURVIVOR · ${data.id}` : `${nodeState.id} · STORED`;
+          if (subEl) subEl.innerHTML = `<span class="stored-text">⏳ Stored · Retrying beacon</span>`;
         } else if (isOnline) {
-          element.classList.remove('down', 'waiting-for-mesh');
           element.classList.add('online');
-          if (labelEl) {
-            labelEl.textContent = data.role === 'dongle' ? 'DONGLE' : (data.role === 'helper' ? 'BASE CAMP' : data.id);
-          }
-          if (subEl) {
-            const defaultRssi = { N1: -68, N2: -72, N3: -78, N4: -87, N5: -82, N6: -76, N7: -70, N8: -69 };
-            const rssi = defaultRssi[data.id] || -75;
-            subEl.textContent = data.role === 'helper' ? 'Safe ground' : `${rssi} dBm`;
-          }
+          const info = this.getNodeDisplayInfo(data, true, false, false);
+          if (labelEl) labelEl.textContent = info.primary;
+          if (subEl) subEl.textContent = info.sub;
         } else {
-          // Node Down State (N3 at t=22s, N6 at t=40s, or manual kill)
-          element.classList.remove('online', 'waiting-for-mesh');
           element.classList.add('down');
-          if (labelEl) labelEl.textContent = 'NODE DOWN';
-          if (subEl) subEl.innerHTML = `<span class="down-text">⚠ Flooded</span>`;
+          if (labelEl) labelEl.textContent = `⚠ ${data.id} DOWN`;
+          if (subEl) subEl.innerHTML = `<span class="down-text">Submerged in flood</span>`;
         }
       });
     }
@@ -358,6 +351,55 @@ export class NodeLayer {
   }
 
   /**
+   * Helper to resolve clean tactical label and subtext for any node
+   */
+  getNodeDisplayInfo(node, isOnline = true, isHoldingSos = false, isAck = false) {
+    const defaultRssi = {
+      N1: -68, N2: -72, N3: -78, N4: -87,
+      N5: -82, N6: -76, N7: -70, N8: -69
+    };
+    const rssi = defaultRssi[node.id] || -75;
+
+    if (node.role === 'dongle' || node.isDynamic) {
+      const primary = `🔴 SURVIVOR · ${node.id}`;
+      let sub = node.sublabel || (node.isDynamic ? 'Live Survivor' : 'Balkhu Rooftop');
+      if (isAck) {
+        sub = '✅ Rescue Confirmed!';
+      } else if (isHoldingSos) {
+        sub = '⏳ Stored in Flash (Retrying)';
+      } else if (!isOnline) {
+        sub = '⚠ Disconnected';
+      }
+      return { primary, sub, roleClass: 'role-dongle' };
+    }
+
+    if (node.role === 'helper') {
+      return {
+        primary: '🟢 BASE CAMP · N8',
+        sub: 'Rescue Command HQ',
+        roleClass: 'role-helper'
+      };
+    }
+
+    if (node.role === 'relay') {
+      const primary = `🔵 RELAY · ${node.id}`;
+      let sub = `${node.sublabel || node.place?.split(' ')?.[0] || 'Community'} · ${rssi} dBm`;
+      if (!isOnline) {
+        sub = '⚠ Flooded (Down)';
+      } else if (isHoldingSos) {
+        sub = '⏳ Stored · Waiting Link';
+      }
+      return { primary, sub, roleClass: 'role-relay' };
+    }
+
+    return {
+      primary: node.id,
+      sub: `${rssi} dBm`,
+      roleClass: 'role-relay'
+    };
+  }
+
+  /**
    * Render dynamic node marker on map
    */
   renderDynamicNodeMarker(node) {
@@ -368,20 +410,22 @@ export class NodeLayer {
     el.className = `mesh-node-marker role-dongle dynamic-node online`;
     el.id = `node-marker-${node.id}`;
 
-    const iconHtml = `<svg class="node-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 1 0-16 0"/></svg>`;
+    const iconHtml = `<svg class="node-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`;
+
+    el.title = `${node.id} · Stranded Survivor (Live Beacon)`;
 
     el.innerHTML = `
       <div class="node-beacon">
-        <div class="node-wave wave-1" style="border-color:#00f0ff"></div>
-        <div class="node-wave wave-2" style="border-color:#00f0ff"></div>
-        <div class="node-icon-box" style="background:rgba(0,240,255,0.25);border:2px solid #00f0ff">
+        <div class="node-wave wave-1"></div>
+        <div class="node-wave wave-2"></div>
+        <div class="node-core">
           ${iconHtml}
-          <div class="node-status-badge">●</div>
+          <div class="node-down-badge">⚠</div>
         </div>
       </div>
-      <div class="node-info">
-        <div class="node-label" style="color:#00f0ff">${node.label}</div>
-        <div class="node-sub" style="color:#38bdf8">Dynamic · Online</div>
+      <div class="node-tag">
+        <div class="node-label">🔴 SURVIVOR · ${node.id}</div>
+        <div class="node-sub">Live Distress Beacon</div>
       </div>
     `;
 
@@ -493,16 +537,17 @@ export class NodeLayer {
       `;
     }
 
-    // Dynamic Survivor or Relay Node
+    // Dynamic Survivor Node
     const dynamicNode = this.latestState?.nodes?.find(n => n.id === nodeId && n.isDynamic);
     if (dynamicNode) {
       const path = window.engine ? window.engine.findShortestPath(nodeId, 'N8', this.latestState) : null;
-      const pathText = path ? path.join(' ➔ ') : 'NO ROUTE (Held in Flash Memory)';
+      const pathText = path ? path.join(' ➔ ') : 'NO ROUTE (Stored in Flash Memory)';
       const hopsCount = path ? `${path.length - 1} hops` : 'ISOLATED';
+      const isAck = Boolean(dynamicNode.isAcknowledged);
 
       return `
         <div class="popup-header">
-          <div class="popup-badge" style="background:rgba(0,240,255,0.2);color:#00f0ff;border:1px solid #00f0ff">DYNAMIC NODE</div>
+          <div class="popup-badge" style="background:rgba(239,68,68,0.25);color:#ef4444;border:1px solid #ef4444">🔴 SURVIVOR DONGLE</div>
           <div class="popup-title">${dynamicNode.label}</div>
           <button class="popup-close-btn" title="Close">✕</button>
         </div>
@@ -512,6 +557,12 @@ export class NodeLayer {
             <span class="popup-val">${dynamicNode.place}</span>
           </div>
           <div class="popup-row">
+            <span class="popup-label">STATUS</span>
+            <span class="popup-val" style="color:${isAck ? '#10b981' : '#ef4444'};font-weight:700;">
+              ${isAck ? '✅ ACK RECEIVED · Rescue Confirmed' : '🚨 DISTRESS BEACON ACTIVE'}
+            </span>
+          </div>
+          <div class="popup-row">
             <span class="popup-label">RADIO HOPS TO HQ</span>
             <span class="popup-val" style="color:#00f0ff;font-weight:700;">${hopsCount}</span>
           </div>
@@ -519,9 +570,12 @@ export class NodeLayer {
             <span class="popup-label">LIVE MESH ROUTE</span>
             <span class="popup-val" style="font-size:10px;color:#38bdf8;">${pathText}</span>
           </div>
+          <div class="popup-notice notice-info" style="margin-top:6px;font-size:11px;">
+            Dongle automatically broadcasts distress beacon every 16s until acknowledged by Base Camp.
+          </div>
           <div style="margin-top:10px;display:flex;flex-direction:column;gap:6px;">
             <button id="btn-dyn-send-sos" style="background:#ff3b3b;color:white;border:none;padding:7px 10px;border-radius:4px;font-weight:700;cursor:pointer;font-size:11px;">
-              🚨 TRANSMIT LIVE SOS
+              🚨 TRANSMIT LIVE SOS BEACON
             </button>
             <button id="btn-dyn-remove" style="background:transparent;color:#94a3b8;border:1px solid #475569;padding:5px 8px;border-radius:4px;cursor:pointer;font-size:10px;">
               ✕ Remove Node

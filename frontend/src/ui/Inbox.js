@@ -72,12 +72,11 @@ export class BaseCampInbox {
     const reversed = [...delivered].reverse();
 
     reversed.forEach((sos, index) => {
-      // Find origin node coordinates
-      const originNode = this.scenario.nodes.find(n => n.id === sos.from) || {
-        lat: 27.6840,
-        lon: 85.2970,
-        place: 'Kathmandu'
-      };
+      // Find origin node coordinates (scenario nodes or dynamic survivors)
+      const dynNode = window.engine?.dynamicNodes?.get(sos.from);
+      const originNode = this.scenario.nodes.find(n => n.id === sos.from)
+        || dynNode
+        || { lat: 27.6840, lon: 85.2970, place: 'Kathmandu' };
 
       const needClass = sos.need === 'MEDICAL' ? 'need-medical'
                       : sos.need === 'RESCUE'  ? 'need-rescue'

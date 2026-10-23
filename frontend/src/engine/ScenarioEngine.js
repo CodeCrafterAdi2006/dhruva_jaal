@@ -26,9 +26,21 @@ export class ScenarioEngine extends DataSource {
     this.dynamicNodes = new Map();
     this.dynamicEdges = [];
     this.dynamicSosList = [];
+
+    // Periodic Survivor Distress Beacon Loop (N1 & Dynamic Survivors)
+    this.survivorBeacons = new Map();
+    this.beaconTimerId = null;
   }
 
   init() {
+    // Register initial trapped rooftop survivor (N1)
+    this.registerSurvivorBeacon('N1', {
+      people: 4,
+      need: 'RESCUE',
+      battery: 18,
+      text: 'BALKHU ROOFTOP: Water rising above 2.8m. 4 people trapped on tin roof. Immediate boat rescue needed.'
+    });
+    this.ensureBeaconLoop();
     this.seek(0);
     this.emit('loaded', this.scenario);
   }
@@ -119,9 +131,9 @@ export class ScenarioEngine extends DataSource {
 
     const node = {
       id,
-      role,
-      label,
-      sublabel: '(Dynamic Node)',
+      role: 'dongle',
+      label: `🔴 SURVIVOR · ${id}`,
+      sublabel: 'Live Survivor',
       place: `GPS: ${lat.toFixed(4)}, ${lon.toFixed(4)}`,
       lat,
       lon,
@@ -163,6 +175,15 @@ export class ScenarioEngine extends DataSource {
       }
     });
 
+    // Register survivor and trigger first distress beacon
+    this.registerSurvivorBeacon(id, {
+      people: 2,
+      need: 'RESCUE',
+      battery: 88,
+      text: `EMERGENCY: Stranded survivor at ${id} (${lat.toFixed(4)}, ${lon.toFixed(4)}). Immediate rescue needed.`
+    });
+    this.fireSurvivorBeacon(id);
+
     const state = this.reconstructStateAt(this.currentTime);
     this.emit('state_update', state);
     this.emit('node_spawned', { node, state });
@@ -170,10 +191,165 @@ export class ScenarioEngine extends DataSource {
   }
 
   /**
+   * Register a survivor node for periodic distress beacons until ACK
+   */
+  registerSurvivorBeacon(nodeId, config = {}) {
+    if (this.survivorBeacons.has(nodeId)) {
+      const s = this.survivorBeacons.get(nodeId);
+      if (config.text) s.text = config.text;
+      return s;
+    }
+
+    const survivor = {
+      id: nodeId,
+      isAcknowledged: false,
+      lastBeaconTimestamp: 0,
+      beaconIntervalSeconds: 16, // Real-world LoRa distress beacon interval
+      beaconAttempts: 0,
+      people: config.people || 2,
+      need: config.need || 'RESCUE',
+      battery: config.battery || 85,
+      text: config.text || `EMERGENCY: Stranded survivor at ${nodeId}. Immediate rescue required.`,
+      storedInFlash: false
+    };
+
+    this.survivorBeacons.set(nodeId, survivor);
+    this.ensureBeaconLoop();
+    return survivor;
+  }
+
+  ensureBeaconLoop() {
+    if (this.beaconTimerId) return;
+    this.beaconTimerId = setInterval(() => {
+      this.checkSurvivorBeacons();
+    }, 2500);
+  }
+
+  checkSurvivorBeacons() {
+    const now = performance.now();
+    this.survivorBeacons.forEach(survivor => {
+      if (survivor.isAcknowledged) return;
+
+      const elapsed = (now - survivor.lastBeaconTimestamp) / 1000;
+      if (survivor.lastBeaconTimestamp === 0 || elapsed >= survivor.beaconIntervalSeconds) {
+        this.fireSurvivorBeacon(survivor.id);
+      }
+    });
+  }
+
+  fireSurvivorBeacon(nodeId) {
+    const survivor = this.survivorBeacons.get(nodeId);
+    if (!survivor || survivor.isAcknowledged) return;
+
+    survivor.lastBeaconTimestamp = performance.now();
+    survivor.beaconAttempts++;
+
+    const state = this.reconstructStateAt(this.currentTime);
+
+    if (!this.withMesh) {
+      this.emit('sos_failed', {
+        id: `SOS-${nodeId}-B${survivor.beaconAttempts}`,
+        reason: 'Cellular grid DOWN. Zero LoRa mesh coverage in Without-Mesh mode.',
+        from: nodeId
+      });
+      return;
+    }
+
+    const path = this.findShortestPath(nodeId, 'N8', state);
+
+    if (!path) {
+      // Mesh isolated or bridge drowned — store in flash memory
+      survivor.storedInFlash = true;
+      const sosItem = {
+        id: `SOS-${nodeId}-B${survivor.beaconAttempts}`,
+        from: nodeId,
+        path: [nodeId],
+        people: survivor.people,
+        need: survivor.need,
+        battery: survivor.battery,
+        text: survivor.text,
+        state: 'STORED',
+        statusText: `STORED IN DONGLE FLASH · Retrying beacon #${survivor.beaconAttempts} every 16s...`,
+        isDynamic: true
+      };
+      this.emit('sos_stored', { survivor, sosItem, reason: 'No active route to Base Camp. Held in flash memory.' });
+      this.emit('state_update', this.reconstructStateAt(this.currentTime));
+      return;
+    }
+
+    // Active path found — transmit packet across mesh!
+    survivor.storedInFlash = false;
+    const sosItem = {
+      id: `SOS-${nodeId}-B${survivor.beaconAttempts}`,
+      from: nodeId,
+      path,
+      people: survivor.people,
+      need: survivor.need,
+      battery: survivor.battery,
+      text: survivor.text,
+      state: 'TRANSMITTING',
+      isDynamic: true,
+      deliveredAt: null,
+      simClock: state.simClock || 'LIVE'
+    };
+
+    this.dynamicSosList.push(sosItem);
+
+    // Launch real-time packet flight across nodes
+    this.emit('live_packet_launch', {
+      id: sosItem.id,
+      from: nodeId,
+      path,
+      text: sosItem.text,
+      isAck: false,
+      onHop: (from, to, hopIdx) => {
+        this.emit('packet_hop', { id: sosItem.id, from, to, hopIdx });
+      },
+      onDelivered: () => {
+        // 1. Deliver to Base Camp
+        sosItem.state = 'DELIVERED';
+        sosItem.deliveredAt = this.currentTime;
+        this.emit('sos_delivered', { sosItem, state: this.reconstructStateAt(this.currentTime) });
+        this.emit('state_update', this.reconstructStateAt(this.currentTime));
+
+        // 2. Base Camp immediately dispatches return ACK packet
+        const reversePath = [...path].reverse();
+        const ackId = `ACK-${sosItem.id}`;
+
+        this.emit('live_packet_launch', {
+          id: ackId,
+          from: 'N8',
+          path: reversePath,
+          text: `CONFIRMED: Rescue boat dispatched to ${nodeId}. Stay above water line.`,
+          isAck: true,
+          onHop: (from, to, hopIdx) => {
+            this.emit('ack_hop', { id: ackId, from, to, hopIdx });
+          },
+          onDelivered: () => {
+            // 3. Survivor receives two-way ACK
+            survivor.isAcknowledged = true;
+            this.emit('survivor_ack', {
+              nodeId,
+              sosId: sosItem.id,
+              ackId,
+              text: `Rescue confirmation received by ${nodeId}!`
+            });
+            this.emit('state_update', this.reconstructStateAt(this.currentTime));
+          }
+        });
+      }
+    });
+
+    this.emit('sos_beacon_sent', { survivor, sosItem, path });
+    this.emit('state_update', this.reconstructStateAt(this.currentTime));
+  }
+
+  /**
    * Remove a dynamic node and its attached edges
    */
   removeDynamicNode(nodeId) {
     this.dynamicNodes.delete(nodeId);
+    this.survivorBeacons.delete(nodeId);
     this.dynamicEdges = this.dynamicEdges.filter(e => e.a !== nodeId && e.b !== nodeId);
     this.dynamicSosList = this.dynamicSosList.filter(s => s.from !== nodeId);
     const state = this.reconstructStateAt(this.currentTime);
@@ -232,50 +408,16 @@ export class ScenarioEngine extends DataSource {
    * Live SOS Transmission from any dynamic or ground node
    */
   sendDynamicSos(fromId, customText) {
-    const state = this.reconstructStateAt(this.currentTime);
-    const path = this.findShortestPath(fromId, 'N8', state);
-    const sosId = `DYN-SOS-${this.dynamicSosList.length + 1}`;
-    const text = customText || 'EMERGENCY: SURVIVOR STRANDED. NEED RESCUE.';
-
-    if (path) {
-      const sosItem = {
-        id: sosId,
-        t: this.currentTime,
-        from: fromId,
-        path,
-        people: 2,
-        need: 'RESCUE',
-        battery: 18,
-        simClock: state.simClock || 'LIVE',
-        text,
-        isDynamic: true
-      };
-      this.dynamicSosList.push(sosItem);
-      this.emit('sos', sosItem);
-      const updatedState = this.reconstructStateAt(this.currentTime);
-      this.emit('state_update', updatedState);
-      return { success: true, path, sosItem };
+    let survivor = this.survivorBeacons.get(fromId);
+    if (!survivor) {
+      survivor = this.registerSurvivorBeacon(fromId, { text: customText });
     } else {
-      const sosItem = {
-        id: sosId,
-        t: this.currentTime,
-        from: fromId,
-        path: [fromId],
-        people: 2,
-        need: 'RESCUE',
-        battery: 18,
-        simClock: state.simClock || 'LIVE',
-        text,
-        state: 'STORED',
-        statusText: 'STORED IN DONGLE FLASH · Waiting for live mesh path...',
-        isDynamic: true
-      };
-      this.dynamicSosList.push(sosItem);
-      this.emit('sos_failed', { id: sosId, reason: 'Isolated: No route to Base Camp. Held in flash memory.' });
-      const updatedState = this.reconstructStateAt(this.currentTime);
-      this.emit('state_update', updatedState);
-      return { success: false, reason: 'No route to Base Camp', sosItem };
+      survivor.isAcknowledged = false;
+      if (customText) survivor.text = customText;
     }
+    survivor.lastBeaconTimestamp = 0; // Force immediate broadcast
+    this.fireSurvivorBeacon(fromId);
+    return { success: true, survivor };
   }
 
   loop() {
@@ -565,8 +707,22 @@ export class ScenarioEngine extends DataSource {
 
     // Merge dynamically injected nodes
     this.dynamicNodes.forEach((dynNode, id) => {
-      activeNodes.set(id, { ...dynNode });
+      const beacon = this.survivorBeacons.get(id);
+      activeNodes.set(id, {
+        ...dynNode,
+        isAcknowledged: Boolean(beacon?.isAcknowledged),
+        storedInFlash: Boolean(beacon?.storedInFlash),
+        beaconAttempts: beacon?.beaconAttempts || 0
+      });
     });
+
+    // Also update N1 with its survivor beacon status
+    const n1Beacon = this.survivorBeacons.get('N1');
+    if (activeNodes.has('N1') && n1Beacon) {
+      activeNodes.get('N1').isAcknowledged = Boolean(n1Beacon.isAcknowledged);
+      activeNodes.get('N1').storedInFlash = Boolean(n1Beacon.storedInFlash);
+      activeNodes.get('N1').beaconAttempts = n1Beacon.beaconAttempts || 0;
+    }
 
     // Compute active edges for Map and Sidebar (static edges + dynamic edges)
     const allEdges = [...this.scenario.edges, ...this.dynamicEdges];
@@ -593,10 +749,15 @@ export class ScenarioEngine extends DataSource {
       ...this.dynamicSosList
     ];
     allSos.forEach(sosItem => {
-      const s = this.getSosStateAt(sosItem, t);
-      if (s) {
-        sosStates.push(s);
-        if (s.state === 'DELIVERED') deliveredSos.push(s);
+      if (sosItem.isDynamic) {
+        sosStates.push(sosItem);
+        if (sosItem.state === 'DELIVERED') deliveredSos.push(sosItem);
+      } else {
+        const s = this.getSosStateAt(sosItem, t);
+        if (s) {
+          sosStates.push(s);
+          if (s.state === 'DELIVERED') deliveredSos.push(s);
+        }
       }
     });
 

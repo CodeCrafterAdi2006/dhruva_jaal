@@ -123,11 +123,18 @@ mapManager.init().then(map => {
         const dbm  = n.status === 'online' ? Math.round(raw + jitter) : null;
         const cls  = dbm !== null ? rssiToClass(dbm) : 'offline';
         const w    = dbm !== null ? rssiToWidth(dbm) : 5;
-        const label = n.role === 'dongle' ? 'Node 1 (DONGLE)'
-                    : n.role === 'helper' ? 'Node 8 (HELPER)'
-                    : n.role === 'drone'  ? `${n.id} (DRONE)`
-                    : n.role === 'balloon'? `${n.id} (BALLOON)`
-                    : `${n.id} (RELAY)`;
+        let label = `${n.id} (RELAY)`;
+        if (n.role === 'dongle' || n.isDynamic) {
+          label = `🔴 ${n.id} · Survivor (${n.sublabel || 'Stranded'})`;
+        } else if (n.role === 'helper') {
+          label = `🟢 ${n.id} · Base Camp HQ (Safe Ground)`;
+        } else if (n.role === 'drone') {
+          label = `🚁 ${n.id} · Drone (80m Relay)`;
+        } else if (n.role === 'balloon') {
+          label = `🎈 ${n.id} · Balloon (100m Aerostat)`;
+        } else {
+          label = `🔵 ${n.id} · Relay (${n.sublabel || n.place?.split(' ')?.[0] || 'Community'})`;
+        }
         const valStr = dbm !== null ? `${dbm} dBm` : '— OFFLINE';
         nodesList.innerHTML += `
           <div class="node-row ${n.status !== 'online' ? 'node-row-down' : ''}">
@@ -171,6 +178,43 @@ mapManager.init().then(map => {
     updateSidebar(state);
     inbox.reset();
     updateTimeline(state);
+  });
+
+  // Real-time interactive packet transmission (animates live independent of timeline)
+  engine.on('live_packet_launch', (packetConfig) => {
+    linkPacketLayer.launchLivePacket(packetConfig);
+  });
+
+  engine.on('survivor_ack', (evt) => {
+    if (logFeed) {
+      const item = document.createElement('div');
+      item.className = 'log-item log-item-delivered';
+      item.innerHTML = `
+        <div class="log-meta">
+          <span class="log-time">TWO-WAY ACK</span>
+          <span class="log-tag state-delivered" style="background:#10b981;color:#0b1220;font-weight:900">CONFIRMED</span>
+        </div>
+        <div class="log-detail" style="color:#10b981;font-weight:700">✅ ${evt.nodeId} received Base Camp Rescue ACK! Boat en route.</div>
+      `;
+      logFeed.prepend(item);
+      while (logFeed.children.length > 8) logFeed.removeChild(logFeed.lastChild);
+    }
+  });
+
+  engine.on('sos_stored', (evt) => {
+    if (logFeed) {
+      const item = document.createElement('div');
+      item.className = 'log-item';
+      item.innerHTML = `
+        <div class="log-meta">
+          <span class="log-time">STORE & FWD</span>
+          <span class="log-tag state-stored">FLASH HOLD</span>
+        </div>
+        <div class="log-detail" style="color:#f5b942">⏳ Survivor ${evt.survivor.id} isolated · Held in flash (retrying every 16s)</div>
+      `;
+      logFeed.prepend(item);
+      while (logFeed.children.length > 8) logFeed.removeChild(logFeed.lastChild);
+    }
   });
 
   engine.on('node_status', (evt) => {
