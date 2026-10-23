@@ -174,6 +174,19 @@ export class MapManager {
           'line-opacity': 0.85
         }
       });
+
+      // Step 1.3: 3D Volumetric Extrusion Layer (Rising flood depth)
+      this.map.addLayer({
+        id: 'flood-zone-3d',
+        type: 'fill-extrusion',
+        source: 'flood-zone-source',
+        paint: {
+          'fill-extrusion-color': '#1a56a6',
+          'fill-extrusion-height': 0,
+          'fill-extrusion-base': 0,
+          'fill-extrusion-opacity': 0
+        }
+      });
     }
 
     // 2. Safe Ground Circle (SZ1 around Base Camp N8)
@@ -214,6 +227,27 @@ export class MapManager {
     setTimeout(() => this.renderZones(), 100);
   }
 }
+
+  /**
+   * Step 1.3: Dynamically animate flood water volume rising from 0m to 4.2m
+   * Soft, translucent water volume so buildings stay clearly visible rising out of the water!
+   */
+  updateFloodLevel(t = 0) {
+    if (!this.map || !this.map.getLayer('flood-zone-3d')) return;
+
+    let height = 0;
+    let opacity = 0;
+
+    if (t > 6) {
+      // Water rises smoothly between t=6s and t=40s (34s duration)
+      const progress = Math.min(1, Math.max(0, (t - 6) / 34));
+      height = progress * 4.2; // Max 4.2 meters (ground-floor inundation)
+      opacity = 0.15 + (progress * 0.25); // Soft translucent 0.15 to 0.40 max (never solid blue blob!)
+    }
+
+    this.map.setPaintProperty('flood-zone-3d', 'fill-extrusion-height', height);
+    this.map.setPaintProperty('flood-zone-3d', 'fill-extrusion-opacity', opacity);
+  }
 
   /**
    * Helper to generate a smooth GeoJSON polygon circle from center and radius in meters

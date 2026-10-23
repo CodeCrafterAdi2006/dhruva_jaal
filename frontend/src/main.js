@@ -155,6 +155,7 @@ mapManager.init().then(map => {
     updateAlert(state);
     nodeLayer.update(state);
     linkPacketLayer.update(state);
+    mapManager.updateFloodLevel(state.t || 0);
     updateSidebar(state);
     inbox.update(state);
     updateTimeline(state);
@@ -164,6 +165,7 @@ mapManager.init().then(map => {
     updateAlert(state);
     nodeLayer.update(state);
     linkPacketLayer.update(state);
+    mapManager.updateFloodLevel(0);
     seenSos.clear();
     if (logFeed) logFeed.innerHTML = '';
     updateSidebar(state);
