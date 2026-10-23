@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Dhruva Jaal — Executive Project Overview</title>
+<style>
+  @page {
+    size: A4 portrait;
+    margin: 8mm 9mm 8mm 9mm;
+  }
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: #0f172a;
+    background: #ffffff;
+    font-size: 8.5pt;
+    line-height: 1.25;
+  }
+  .header {
+    border-bottom: 2px solid #0284c7;
+    padding-bottom: 4px;
+    margin-bottom: 6px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+  }
+  .title-group h1 {
+    font-size: 17pt;
+    font-weight: 900;
+    letter-spacing: -0.3px;
+    color: #0369a1;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .title-group h1 span.hindi {
+    font-size: 13pt;
+    color: #d97706;
+    font-weight: 700;
+  }
+  .title-group p {
+    font-size: 8pt;
+    color: #475569;
+    font-weight: 600;
+    margin-top: 1px;
+  }
+  .meta-badges {
+    text-align: right;
+    font-size: 7.2pt;
+    color: #334155;
+    font-weight: 600;
+    line-height: 1.35;
+  }
+  .meta-badge-pill {
+    display: inline-block;
+    background: #e0f2fe;
+    color: #0369a1;
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-weight: 700;
+    border: 1px solid #bae6fd;
+    font-size: 6.8pt;
+  }
+
+  .grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 7px;
+    margin-bottom: 6px;
+  }
+  .grid-3 {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 6px;
+    margin-bottom: 6px;
+  }
+
+  .card {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 4px;
+    padding: 5px 7px;
+  }
+  .card-highlight {
+    background: #f0f9ff;
+    border-color: #7dd3fc;
+  }
+  .card h2 {
+    font-size: 8.8pt;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    margin-bottom: 3px;
+    color: #0f172a;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .card h2 .icon {
+    font-size: 9pt;
+  }
+  .card p {
+    color: #334155;
+    font-size: 7.8pt;
+    margin-bottom: 3px;
+  }
+  .card ul {
+    list-style: none;
+    padding-left: 0;
+  }
+  .card ul li {
+    position: relative;
+    padding-left: 9px;
+    margin-bottom: 2px;
+    font-size: 7.6pt;
+    color: #1e293b;
+  }
+  .card ul li::before {
+    content: "▪";
+    position: absolute;
+    left: 0;
+    color: #0284c7;
+    font-size: 9pt;
+    line-height: 7pt;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 2px;
+    font-size: 7.2pt;
+  }
+  th, td {
+    padding: 2.5px 4px;
+    border: 1px solid #cbd5e1;
+    text-align: left;
+  }
+  th {
+    background: #e2e8f0;
+    font-weight: 700;
+    color: #1e293b;
+  }
+  tr:nth-child(even) td {
+    background: #f8fafc;
+  }
+
+  .code-tag {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    background: #f1f5f9;
+    padding: 0.5px 3px;
+    border-radius: 2px;
+    border: 1px solid #cbd5e1;
+    font-size: 6.8pt;
+    color: #0369a1;
+  }
+
+  .accent-box {
+    background: #fffbeb;
+    border-left: 3px solid #d97706;
+    padding: 3px 6px;
+    margin-bottom: 5px;
+    font-size: 7.5pt;
+    color: #78350f;
+  }
+  .accent-box strong {
+    color: #92400e;
+  }
+
+  .flow-banner {
+    background: #0f172a;
+    color: #f8fafc;
+    border-radius: 4px;
+    padding: 5px 8px;
+    margin-bottom: 6px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 7.2pt;
+  }
+  .flow-step {
+    text-align: center;
+    flex: 1;
+  }
+  .flow-step .num {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    background: #0284c7;
+    color: #fff;
+    border-radius: 50%;
+    font-size: 6.8pt;
+    font-weight: 800;
+    line-height: 14px;
+    margin-bottom: 1px;
+  }
+  .flow-step .label {
+    font-weight: 700;
+    color: #38bdf8;
+    display: block;
+    font-size: 7pt;
+  }
+  .flow-step .desc {
+    color: #94a3b8;
+    font-size: 6.5pt;
+  }
+  .flow-arrow {
+    color: #64748b;
+    font-size: 9pt;
+    padding: 0 3px;
+  }
+
+  .footer {
+    border-top: 1px solid #e2e8f0;
+    padding-top: 3px;
+    margin-top: 4px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 6.8pt;
+    color: #64748b;
+  }
+  .footer strong {
+    color: #0f172a;
+  }
+</style>
+</head>
+<body>
+
+  <!-- Header -->
+  <div class="header">
+    <div class="title-group">
+      <h1>Dhruva Jaal <span class="hindi">(ध्रुव जाल)</span></h1>
+      <p>Autonomous Zero-Infrastructure Emergency LoRa Mesh, Survivor Client & 3D Tactical Digital Twin</p>
+    </div>
+    <div class="meta-badges">
+      <div><span class="meta-badge-pill">Octo GDG Hackathon</span> <span class="meta-badge-pill">Disaster Management Track</span></div>
+      <div style="margin-top:1px;">GitHub: <strong>CodeCrafterAdi2006/dhruva_jaal</strong> · License: MIT</div>
+    </div>
+  </div>
+
+  <!-- Real World Ground Truth -->
+  <div class="accent-box">
+    <strong>Real-World Disaster Ground Truth:</strong> Anchored to verified meteorological data from the <strong>Kathmandu Basin Floods (Sept 27–29, 2024)</strong>. 322mm rainfall in 24h collapsed the municipal grid. Macro cell-towers exhausted backup batteries in 4 hours; landslides severed fiber lines. 1,000+ residents were stranded on Balkhu/Teku rooftops in total darkness with 0 cellular bars. Rescuers searched blind in fast currents, leading to 236 fatalities. Dhruva Jaal asks: <em>What if the mesh was already there?</em>
+  </div>
+
+  <!-- End-to-End Pipeline Banner -->
+  <div class="flow-banner">
+    <div class="flow-step">
+      <div class="num">1</div>
+      <span class="label">Survivor Phone</span>
+      <span class="desc">Plug-and-play USB-C dongle</span>
+    </div>
+    <div class="flow-arrow">➔</div>
+    <div class="flow-step">
+      <div class="num">2</div>
+      <span class="label">Rooftop Relays</span>
+      <span class="desc">433 MHz LoRa mesh hops</span>
+    </div>
+    <div class="flow-arrow">➔</div>
+    <div class="flow-step">
+      <div class="num">3</div>
+      <span class="label">Drowned Relay</span>
+      <span class="desc">SPI Flash Store-and-Forward</span>
+    </div>
+    <div class="flow-arrow">➔</div>
+    <div class="flow-step">
+      <div class="num">4</div>
+      <span class="label">Agile Drones (≤6)</span>
+      <span class="desc">Rapid RF gap bridge (80m)</span>
+    </div>
+    <div class="flow-arrow">➔</div>
+    <div class="flow-step">
+      <div class="num">5</div>
+      <span class="label">100m Aerostat</span>
+      <span class="desc">Make-before-break LoS</span>
+    </div>
+    <div class="flow-arrow">➔</div>
+    <div class="flow-step">
+      <div class="num">6</div>
+      <span class="label">Base Camp 3D Twin</span>
+      <span class="desc">Rescue vector & 2-way ACK</span>
+    </div>
+  </div>
+
+  <!-- 3 Pillars Grid -->
+  <div class="grid-3">
+    <!-- Pillar 1 -->
+    <div class="card">
+      <h2><span class="icon">📱</span> 1. Civilian & Dongle Tier</h2>
+      <p>Turns ordinary smartphones into off-grid emergency communicators with zero cellular infrastructure.</p>
+      <ul>
+        <li><strong>$8 Hardware BOM:</strong> ESP32-C3 Super Mini ($3.20) + Semtech SX1278 Ra-02 ($3.80) + internal 433MHz helical antenna.</li>
+        <li><strong>USB CDC-ACM Link:</strong> Plugs directly into Android USB-C OTG port (draws ~35mA listening current).</li>
+        <li><strong>Offline PWA (<span class="code-tag">survivor_app/</span>):</strong> React 18 + Tailwind client running in Chrome via Web Serial / WebUSB API.</li>
+        <li><strong>Zero Confusion UX:</strong> One-tap SOS, 5s cancel window, medical/trapped flags, and live GPS stamping.</li>
+      </ul>
+    </div>
+
+    <!-- Pillar 2 -->
+    <div class="card">
+      <h2><span class="icon">📻</span> 2. Mesh & Firmware Tier</h2>
+      <p>Deterministic C++ firmware (<span class="code-tag">firmware/</span>) guaranteeing packet persistence during network destruction.</p>
+      <ul>
+        <li><strong>Store-and-Forward Flash (<span class="code-tag">store.cpp</span>):</strong> 1.43MB circular flash buffer caching 24,000+ SOS records when downstream links drown.</li>
+        <li><strong>Slotted CAD MAC (<span class="code-tag">mac.cpp</span>):</strong> 12.3ms Carrier Activity Detection + jittered backoff prevents broadcast storms.</li>
+        <li><strong>Geographic Forwarding:</strong> Local score router ranks neighbors by distance to HQ, RSSI, and aerial elevation bonus.</li>
+        <li><strong>Two-Way Cryptographic ACK:</strong> Survivor node turns GREEN only upon verified ACK delivery from Base Camp.</li>
+      </ul>
+    </div>
+
+    <!-- Pillar 3 -->
+    <div class="card card-highlight">
+      <h2><span class="icon">🚁</span> 3. Two-Tier Aerial & 3D Twin</h2>
+      <p>Tactical Command Center (<span class="code-tag">frontend/</span>) running 60 FPS WebGL 3D terrain and autonomous fleet optimization.</p>
+      <ul>
+        <li><strong>Strict 6-Drone Ceiling:</strong> Realistic disaster logistics limit active drones to 6 to prevent airspace collisions and battery depletion.</li>
+        <li><strong>Steiner Midpoint Gap Solver:</strong> Clusters isolated nodes and computes optimal airborne relay bridge coordinates.</li>
+        <li><strong>Auto Aerostat Relief:</strong> If gaps exceed 6, stationed drones are automatically relieved by 100m tethered balloons.</li>
+        <li><strong>Procedural Audio:</strong> Pure Web Audio API synthesizing real LoRa Chirp Spread Spectrum (800Hz→2400Hz) sweeps.</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Technical Specs & Physics Table -->
+  <div class="grid-2">
+    <div class="card">
+      <h2><span class="icon">📐</span> RF Propagation & Physics Formulation</h2>
+      <table>
+        <tr>
+          <th>Metric / Parameter</th>
+          <th>Design Value</th>
+          <th>Physical / Operational Significance</th>
+        </tr>
+        <tr>
+          <td><strong>Carrier Frequency</strong></td>
+          <td>433.00 MHz ISM</td>
+          <td>&lambda;=69.2cm; superior knife-edge diffraction vs 868/915MHz in wet masonry.</td>
+        </tr>
+        <tr>
+          <td><strong>Modulation Profile</strong></td>
+          <td>SF10 · BW 125kHz · CR 4/5</td>
+          <td>Receiver sensitivity -137 dBm; total link budget +157 dB.</td>
+        </tr>
+        <tr>
+          <td><strong>Time-on-Air (ToA)</strong></td>
+          <td>370.7 ms (32-byte frame)</td>
+          <td>Low channel occupancy; verified via Semtech SX1278 calculation.</td>
+        </tr>
+        <tr>
+          <td><strong>1st Fresnel Zone ($F_1$)</strong></td>
+          <td>$F_1 = 8.656\sqrt{d_{\text{km}}/0.433}$</td>
+          <td>Ground link obstructed (<20% clearance); 100m aerostat achieves 96% LoS.</td>
+        </tr>
+        <tr>
+          <td><strong>Geographic Score</strong></td>
+          <td>$0.5\cdot\Delta d + 0.3\cdot\text{RSSI} + 0.2\cdot\text{Alt}$</td>
+          <td>Dynamically steers packets towards HQ without full routing tables.</td>
+        </tr>
+      </table>
+    </div>
+
+    <div class="card">
+      <h2><span class="icon">⚡</span> Disaster Simulation Timeline (Balkhu Inundation)</h2>
+      <table>
+        <tr>
+          <th>Sim Time</th>
+          <th>Phase</th>
+          <th>Disaster Event & Autonomous System Response</th>
+        </tr>
+        <tr>
+          <td><strong>t = 0.0s</strong></td>
+          <td>P1</td>
+          <td>Cellular grid collapses; N1 on Balkhu rooftop sends SOS1 across ground relays.</td>
+        </tr>
+        <tr>
+          <td><strong>t = 12.6s</strong></td>
+          <td>P1</td>
+          <td>Base Camp receives SOS1; returns two-way ACK; N1 turns GREEN (Confirmed).</td>
+        </tr>
+        <tr>
+          <td><strong>t = 18.0s</strong></td>
+          <td>P2</td>
+          <td>Floodwaters reach 4.5m depth; Relay N2 completely submerged underwater (OFFLINE).</td>
+        </tr>
+        <tr>
+          <td><strong>t = 24.0s</strong></td>
+          <td>P2</td>
+          <td>N1 sends SOS2; blocked at dead N2; held safely in SPI Flash memory (YELLOW).</td>
+        </tr>
+        <tr>
+          <td><strong>t = 30.0s</strong></td>
+          <td>P3</td>
+          <td>Base Camp scrambles 80m Drone DR1 to bridge flood gap; pulls cached SOS2.</td>
+        </tr>
+        <tr>
+          <td><strong>t = 46.0s</strong></td>
+          <td>P4</td>
+          <td>Tethered Aerostat BL1 ascends to 100m; DR1 freed; Balloon ACK turns N1 GREEN.</td>
+        </tr>
+      </table>
+    </div>
+  </div>
+
+  <!-- Verification & Repo Footer -->
+  <div class="footer">
+    <div><strong>Monorepo Structure:</strong> <span class="code-tag">frontend/</span> (3D Twin) · <span class="code-tag">survivor_app/</span> (React PWA) · <span class="code-tag">firmware/</span> (ESP32-C3 C++) · <span class="code-tag">docs/</span> (Protocols)</div>
+    <div><strong>Live Verification:</strong> Run <span class="code-tag">cd frontend && npm run dev</span> → <span class="code-tag">http://localhost:5173</span> · 60 FPS WebGL Guaranteed</div>
+  </div>
+
+</body>
+</html>
