@@ -34,9 +34,18 @@ export class ScenarioEngine extends DataSource {
     this.dynamicEdges = [];
     this.dynamicSosList = [];
 
+    // Active Operational Mode: 'replay' (scripted 5-phase flood) or 'sandbox' (interactive tactical disaster)
+    this.activeMode = 'replay';
+
     // Periodic Survivor Distress Beacon Loop (N1 & Dynamic Survivors)
     this.survivorBeacons = new Map();
     this.beaconTimerId = null;
+  }
+
+  setActiveMode(mode) {
+    this.activeMode = mode;
+    this.emit('mode_changed', { mode });
+    this.emit('state_update', this.reconstructStateAt(this.currentTime));
   }
 
   init() {
@@ -167,26 +176,42 @@ export class ScenarioEngine extends DataSource {
 
     this.dynamicDrones.set(id, drone);
 
-    // Form aerial links (2500m LoRa line-of-sight range)
-    const allLivingNodes = [
+    // Form aerial links: ONLY connect to nearest living nodes with good signal strength (max 2 links, range <= 850m)
+    const state = this.reconstructStateAt(this.currentTime);
+    const liveGroundNodes = [
       ...this.scenario.nodes.filter(n => n.role !== 'drone' && n.role !== 'balloon'),
-      ...Array.from(this.dynamicNodes.values()),
-      baseCamp
-    ];
+      ...Array.from(this.dynamicNodes.values())
+    ].filter(n => {
+      if (this.manualKilledNodes.has(n.id)) return false;
+      const liveNode = state.nodes.find(sn => sn.id === n.id);
+      return liveNode && liveNode.status === 'online';
+    });
 
-    allLivingNodes.forEach(neighbor => {
+    let targets = [];
+    if (options.linkedNodeIds && options.linkedNodeIds.length > 0) {
+      targets = liveGroundNodes.filter(n => options.linkedNodeIds.includes(n.id));
+    }
+    if (targets.length === 0) {
+      const candidates = liveGroundNodes.map(neighbor => ({
+        node: neighbor,
+        dist: this.calculateDistanceMeters(lon, lat, neighbor.lon, neighbor.lat)
+      })).filter(c => c.dist <= 850);
+
+      candidates.sort((a, b) => a.dist - b.dist);
+      targets = candidates.slice(0, 2).map(c => c.node);
+    }
+
+    targets.forEach(neighbor => {
       const dist = this.calculateDistanceMeters(lon, lat, neighbor.lon, neighbor.lat);
-      if (dist <= 2500) {
-        const rawRssi = -60 - 20 * Math.log10(Math.max(1, dist) / 100);
-        const baseRssi = Math.max(-110, Math.min(-62, Math.round(rawRssi)));
-        this.dynamicEdges.push({
-          a: id,
-          b: neighbor.id,
-          baseRssi,
-          droneLink: true,
-          isDynamic: true
-        });
-      }
+      const rawRssi = -60 - 20 * Math.log10(Math.max(10, dist) / 100);
+      const baseRssi = Math.max(-98, Math.min(-62, Math.round(rawRssi)));
+      this.dynamicEdges.push({
+        a: id,
+        b: neighbor.id,
+        baseRssi,
+        droneLink: true,
+        isDynamic: true
+      });
     });
 
     this.emit('aerial', {
@@ -263,27 +288,42 @@ export class ScenarioEngine extends DataSource {
 
     this.dynamicBalloons.set(id, balloon);
 
-    // Form high-altitude balloon links (3500m LoRa line-of-sight range)
-    const baseCamp = this.scenario.nodes.find(n => n.id === 'N8') || { lon: 85.3160, lat: 27.7020 };
-    const allLivingNodes = [
+    // Form high-altitude balloon links: connect ONLY to nearest 2 living nodes within 950m
+    const state = this.reconstructStateAt(this.currentTime);
+    const liveGroundNodes = [
       ...this.scenario.nodes.filter(n => n.role !== 'drone' && n.role !== 'balloon'),
-      ...Array.from(this.dynamicNodes.values()),
-      baseCamp
-    ];
+      ...Array.from(this.dynamicNodes.values())
+    ].filter(n => {
+      if (this.manualKilledNodes.has(n.id)) return false;
+      const liveNode = state.nodes.find(sn => sn.id === n.id);
+      return liveNode && liveNode.status === 'online';
+    });
 
-    allLivingNodes.forEach(neighbor => {
+    let targets = [];
+    if (options.linkedNodeIds && options.linkedNodeIds.length > 0) {
+      targets = liveGroundNodes.filter(n => options.linkedNodeIds.includes(n.id));
+    }
+    if (targets.length === 0) {
+      const candidates = liveGroundNodes.map(neighbor => ({
+        node: neighbor,
+        dist: this.calculateDistanceMeters(lon, lat, neighbor.lon, neighbor.lat)
+      })).filter(c => c.dist <= 950);
+
+      candidates.sort((a, b) => a.dist - b.dist);
+      targets = candidates.slice(0, 2).map(c => c.node);
+    }
+
+    targets.forEach(neighbor => {
       const dist = this.calculateDistanceMeters(lon, lat, neighbor.lon, neighbor.lat);
-      if (dist <= 3500) {
-        const rawRssi = -58 - 20 * Math.log10(Math.max(1, dist) / 100);
-        const baseRssi = Math.max(-110, Math.min(-60, Math.round(rawRssi)));
-        this.dynamicEdges.push({
-          a: id,
-          b: neighbor.id,
-          baseRssi,
-          balloonLink: true,
-          isDynamic: true
-        });
-      }
+      const rawRssi = -58 - 20 * Math.log10(Math.max(10, dist) / 100);
+      const baseRssi = Math.max(-95, Math.min(-60, Math.round(rawRssi)));
+      this.dynamicEdges.push({
+        a: id,
+        b: neighbor.id,
+        baseRssi,
+        balloonLink: true,
+        isDynamic: true
+      });
     });
 
     this.emit('aerial', {
@@ -324,28 +364,30 @@ export class ScenarioEngine extends DataSource {
     const state = this.reconstructStateAt(this.currentTime);
     const gaps = this.meshOptimizer.detectCoverageGaps(state.nodes, state.edges, 'N8');
     if (!gaps || gaps.length === 0) {
-      return { needed: 0, drones: [] };
+      return { 
+        needed: 0, 
+        drones: [],
+        message: 'Mesh topology fully connected. No signal gaps detected.' 
+      };
     }
 
     const dispatched = [];
     gaps.forEach((gap) => {
+      const linkedNodeIds = gap.pair ? [gap.pair.isolated.id, gap.pair.reachable.id] : undefined;
       const drone = this.dispatchDroneTo(gap.lon, gap.lat, {
         label: `DRONE ${this.dynamicDrones.size + 1}`,
-        targetZone: gap.targetZone
+        targetZone: gap.targetZone,
+        linkedNodeIds
       });
       dispatched.push({ drone, gap });
-
-      // After 7 seconds, automatically launch balloon to relieve the drone!
-      setTimeout(() => {
-        if (this.dynamicDrones.has(drone.id)) {
-          this.dispatchBalloonTo(gap.lon, gap.lat, {
-            label: `BALLOON ${this.dynamicBalloons.size + 1}`
-          });
-        }
-      }, 7000);
     });
 
-    return { needed: gaps.length, drones: dispatched };
+    return { 
+      needed: gaps.length, 
+      drones: dispatched,
+      gap: gaps[0],
+      message: `Mesh Optimizer: Dispatched ${gaps.length} drone(s) to bridge severed corridor!` 
+    };
   }
 
   /**
@@ -1056,16 +1098,20 @@ export class ScenarioEngine extends DataSource {
       });
     });
 
-    let towersOnline = true;
+    let towersOnline = this.activeMode === 'sandbox' ? false : true;
     let currentPhase = this.scenario.timeline[0];
-    let simClock = this.scenario.timeline[0].simClock;
+    let simClock = this.activeMode === 'sandbox' ? 'SANDBOX ACTIVE' : this.scenario.timeline[0].simClock;
     const activeAerials = { drones: 'idle', balloons: 'idle' };
 
     this.scenario.timeline.forEach(item => {
       if (item.t <= t) {
-        if (item.simClock) simClock = item.simClock;
+        if (item.simClock && this.activeMode !== 'sandbox') simClock = item.simClock;
         if (item.type === 'phase') currentPhase = item;
-        if (item.type === 'towers' && item.status === 'offline') towersOnline = false;
+        if (this.activeMode === 'sandbox') {
+          towersOnline = false;
+        } else if (item.type === 'towers' && item.status === 'offline') {
+          towersOnline = false;
+        }
 
         if (item.type === 'node_status' && activeNodes.has(item.id)) {
           activeNodes.get(item.id).status = item.status;

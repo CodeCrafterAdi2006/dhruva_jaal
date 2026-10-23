@@ -112,22 +112,22 @@ mapManager.init().then(map => {
         let rolePrefix = 'relay';
         let roleName = 'Relay';
         let detail = n.sublabel || n.place?.split(' ')?.[0] || 'Community';
-        if (n.role === 'dongle' || n.isDynamic) {
-          rolePrefix = 'survivor';
-          roleName = 'Survivor';
-          detail = n.sublabel || 'Stranded';
+        if (n.role === 'drone') {
+          rolePrefix = 'drone';
+          roleName = 'Drone';
+          detail = n.sublabel || '80m Relay';
+        } else if (n.role === 'balloon') {
+          rolePrefix = 'balloon';
+          roleName = 'Balloon';
+          detail = n.sublabel || '100m Aerostat';
         } else if (n.role === 'helper') {
           rolePrefix = 'base';
           roleName = 'Base Camp';
           detail = 'Safe Ground HQ';
-        } else if (n.role === 'drone') {
-          rolePrefix = 'drone';
-          roleName = 'Drone';
-          detail = '80m Relay';
-        } else if (n.role === 'balloon') {
-          rolePrefix = 'balloon';
-          roleName = 'Balloon';
-          detail = '100m Aerostat';
+        } else if (n.role === 'dongle' || (n.isDynamic && n.role !== 'relay')) {
+          rolePrefix = 'survivor';
+          roleName = 'Survivor';
+          detail = n.sublabel || 'Stranded';
         }
         const labelHtml = `<span class="badge-dot dot-${rolePrefix}"></span><span class="node-id-tag">${n.id}</span> · ${roleName} (${detail})`;
         const titleStr = `${n.id} · ${roleName} (${detail})`;
@@ -288,25 +288,42 @@ mapManager.init().then(map => {
     const timelineBar = document.getElementById('timeline-bar');
     const sandboxBar  = document.getElementById('sandbox-bar');
 
+    // Complete simulation reset upon changing modes
+    if (engine.isPlaying) {
+      engine.pause();
+    }
+    engine.clearDynamicNodes();
+    engine.manualKilledNodes.clear();
+    engine.manualAerialDeployed.clear();
+    engine.seek(0);
+    engine.setActiveMode(mode);
+    updatePlayBtn();
+    setSandboxTool(null);
+
+    if (logFeed) {
+      logFeed.innerHTML = `
+        <div class="log-item">
+          <div class="log-meta">
+            <span class="log-time">${mode === 'replay' ? 'REPLAY' : 'SANDBOX'}</span>
+            <span class="log-tag state-queued">RESET</span>
+          </div>
+          <div class="log-detail" style="color:var(--text-secondary)">Simulation reset. Active mode: ${mode === 'replay' ? 'Incident Replay (Kathmandu Flood Timeline)' : 'Tactical Sandbox (Cell Grid Offline · Interactive Tools)'}</div>
+        </div>
+      `;
+    }
+
     if (mode === 'replay') {
       if (btnReplay)  btnReplay.classList.add('active');
       if (btnSandbox) btnSandbox.classList.remove('active');
       if (timelineBar) timelineBar.classList.remove('hidden');
       if (sandboxBar)  sandboxBar.classList.add('hidden');
       if (sourceBadge) sourceBadge.textContent = 'Scenario';
-      setSandboxTool(null);
     } else {
       if (btnReplay)  btnReplay.classList.remove('active');
       if (btnSandbox) btnSandbox.classList.add('active');
       if (timelineBar) timelineBar.classList.add('hidden');
       if (sandboxBar)  sandboxBar.classList.remove('hidden');
       if (sourceBadge) sourceBadge.textContent = 'Sandbox';
-      setSandboxTool(null);
-      // In sandbox mode, pause scripted playback so timeline doesn't advance unattended
-      if (engine.isPlaying) {
-        engine.pause();
-      }
-      updatePlayBtn();
     }
   }
 
@@ -552,17 +569,31 @@ mapManager.init().then(map => {
 
   document.getElementById('sb-auto')?.addEventListener('click', () => {
     const res = engine.autoBridgeGaps();
+    const hint = document.querySelector('.sandbox-hint');
+    if (hint) {
+      hint.textContent = res.needed > 0
+        ? `AI Mesh Optimizer: Dispatched ${res.needed} aerial drone bridge(s) to reconnect isolated nodes!`
+        : `AI Mesh Optimizer: Mesh fully connected. All live nodes have active routes to Base Camp N8.`;
+      hint.style.color = res.needed > 0 ? '#00f0ff' : '#10b981';
+      setTimeout(() => {
+        if (hint) {
+          hint.textContent = 'Interactive Mode: Select a tactical tool to test dynamic routing';
+          hint.style.color = '';
+        }
+      }, 4500);
+    }
     if (logFeed) {
       const item = document.createElement('div');
       item.className = 'log-item';
       item.innerHTML = `
         <div class="log-meta">
-          <span class="log-time">ALGORITHM</span>
-          <span class="log-tag" style="background:#00f0ff22;color:#00f0ff;border:1px solid #00f0ff">GAP-OPTIMIZER</span>
+          <span class="log-time">OPTIMIZER</span>
+          <span class="log-tag" style="background:#00f0ff22;color:#00f0ff;border:1px solid #00f0ff">AI DISPATCH</span>
         </div>
-        <div class="log-detail" style="color:#00f0ff">[OPTIMIZER] ${res.needed > 0 ? `Detected ${res.needed} coverage void(s). Dispatched aerial drone bridge.` : 'Mesh fully connected. Zero coverage voids detected.'}</div>
+        <div class="log-detail" style="color:#00f0ff">${res.message || 'Scanned network topology.'}</div>
       `;
       logFeed.prepend(item);
+      while (logFeed.children.length > 8) logFeed.removeChild(logFeed.lastChild);
     }
   });
 

@@ -158,7 +158,7 @@ export class ModalsManager {
         <div class="tactical-modal-card summary-card">
           <div class="modal-header">
             <div class="modal-title-group">
-              <span class="modal-badge badge-success">MISSION SIMULATION COMPLETE · T+96s</span>
+              <span class="modal-badge badge-success">MISSION SIMULATION COMPLETE · T+76s</span>
               <h2 class="modal-title">Operational Outcome Comparison</h2>
               <p class="modal-subtitle">Evaluating survivable connectivity during severe municipal infrastructure collapse</p>
             </div>
@@ -171,30 +171,30 @@ export class ModalsManager {
               <div class="comparison-col col-mesh">
                 <div class="col-header">
                   <span class="col-pill pill-mesh">WITH DHRUVA JAAL MESH</span>
-                  <div class="col-stat-huge">4 / 4</div>
-                  <div class="col-stat-sub">SOS Messages Successfully Delivered</div>
+                  <div class="col-stat-huge">2 / 2</div>
+                  <div class="col-stat-sub">Emergency SOS Messages Successfully Delivered</div>
                 </div>
 
                 <div class="col-features">
                   <div class="feat-item">
                     <span class="feat-check">✓</span>
-                    <span><strong>100% Delivery:</strong> All trapped survivor reports reached Base Camp HQ.</span>
+                    <span><strong>100% Rescue Confirmation:</strong> Trapped survivor distress calls reached Base Camp HQ, and cryptographic ACK returned to the survivor handset.</span>
                   </div>
                   <div class="feat-item">
                     <span class="feat-check">✓</span>
-                    <span><strong>Dynamic Rerouting:</strong> Survived 2 node drownings (N3 @ t=22s, N6 @ t=40s).</span>
+                    <span><strong>Flash Store-and-Forward:</strong> When Relay N3 (Teku Ward) submerged under 3.2m floodwaters, Relay N2 held SOS2 in flash memory.</span>
                   </div>
                   <div class="feat-item">
                     <span class="feat-check">✓</span>
-                    <span><strong>Store-and-Forward:</strong> N5 held SOS3 in flash until aerial relays arrived.</span>
+                    <span><strong>Targeted Aerial Bridge:</strong> Base Camp scrambled Drone DR1 to bridge the severed Balkhu–Kalimati corridor.</span>
                   </div>
                   <div class="feat-item">
                     <span class="feat-check">✓</span>
-                    <span><strong>Two-Tier Aerial:</strong> Drones bridged immediate gap; balloons held persistent link.</span>
+                    <span><strong>Seamless Balloon Handover:</strong> 100m Tethered Aerostat BL1 took over persistent coverage, allowing Drone DR1 to return safely to base.</span>
                   </div>
                   <div class="feat-item">
                     <span class="feat-check">✓</span>
-                    <span><strong>Zero Responder Risk:</strong> Relays deployed exclusively from safe ground.</span>
+                    <span><strong>Two-Way Return ACK:</strong> Rescue ACK returned via aerostat balloon to Balkhu rooftop survivor, confirming rescue boat dispatch.</span>
                   </div>
                 </div>
               </div>
@@ -203,30 +203,30 @@ export class ModalsManager {
               <div class="comparison-col col-nomesh">
                 <div class="col-header">
                   <span class="col-pill pill-nomesh">WITHOUT MESH (CELLULAR ONLY)</span>
-                  <div class="col-stat-huge down">0 / 4</div>
+                  <div class="col-stat-huge down">0 / 2</div>
                   <div class="col-stat-sub">Messages Delivered to Rescue Teams</div>
                 </div>
 
                 <div class="col-features">
                   <div class="feat-item">
                     <span class="feat-cross">✕</span>
-                    <span><strong>Total Blackout:</strong> Cell towers collapsed at t=6s from power/fiber severance.</span>
+                    <span><strong>Total Cellular Blackout:</strong> Cell towers collapsed at t=19s from power failure and severed fiber backhauls.</span>
                   </div>
                   <div class="feat-item">
                     <span class="feat-cross">✕</span>
-                    <span><strong>Zero Routing:</strong> Trapped citizens had no path to transmit emergency alerts.</span>
+                    <span><strong>0 / 2 Delivered:</strong> Trapped citizens on tin roofs had zero signal. Emergency calls failed and packets dropped.</span>
                   </div>
                   <div class="feat-item">
                     <span class="feat-cross">✕</span>
-                    <span><strong>Lost Packets:</strong> No device-level store-and-forward capability.</span>
+                    <span><strong>No Store-and-Forward:</strong> Commercial mobile handsets have no mesh retransmission, leaving packets permanently lost.</span>
                   </div>
                   <div class="feat-item">
                     <span class="feat-cross">✕</span>
-                    <span><strong>Blind Search:</strong> Rescue crews forced into flooded alleys without survivor GPS.</span>
+                    <span><strong>Blind Search:</strong> Rescue crews forced to search flooded alleys randomly without survivor GPS or trapped headcounts.</span>
                   </div>
                   <div class="feat-item">
                     <span class="feat-cross">✕</span>
-                    <span><strong>High Responder Risk:</strong> Physical searches conducted in contaminated flood currents.</span>
+                    <span><strong>High Responder Risk:</strong> Responders deployed into dangerous, contaminated flood currents without tactical network support.</span>
                   </div>
                 </div>
               </div>
@@ -297,9 +297,9 @@ export class ModalsManager {
       }
     });
 
-    // Engine summary listener
+    // Engine summary listener: fire at t>=76s exclusively during Incident Replay
     this.engine.on('state_update', (state) => {
-      if (state.t >= 96 && !this.summaryShownForRun && this.engine.isPlaying) {
+      if (state.t >= 76 && !this.summaryShownForRun && this.engine.isPlaying && this.engine.activeMode === 'replay') {
         this.summaryShownForRun = true;
         this.showSummaryModal();
       }

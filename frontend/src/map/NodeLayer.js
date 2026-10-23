@@ -246,10 +246,10 @@ export class NodeLayer {
       }
     });
 
-    // 2. Update Ground Nodes (N1 - N8 + Dynamic Nodes) & Store-and-Forward on N5
+    // 2. Update Ground Nodes (N1 - N8 + Dynamic Nodes) & Store-and-Forward on N2/N5
     if (state.nodes) {
-      // Clean up deleted dynamic markers
-      const currentActiveIds = new Set(state.nodes.map(n => n.id));
+      // Clean up deleted dynamic ground markers (exclude aerials)
+      const currentActiveIds = new Set(state.nodes.filter(n => n.role !== 'drone' && n.role !== 'balloon').map(n => n.id));
       this.nodeMarkers.forEach((markerObj, id) => {
         if (markerObj.data.isDynamic && !currentActiveIds.has(id)) {
           markerObj.marker.remove();
@@ -258,6 +258,9 @@ export class NodeLayer {
       });
 
       state.nodes.forEach(nodeState => {
+        // Skip aerial relays (they are managed in Section 3)
+        if (nodeState.role === 'drone' || nodeState.role === 'balloon') return;
+
         let markerObj = this.nodeMarkers.get(nodeState.id);
         if (!markerObj) {
           if (nodeState.isDynamic) {
@@ -270,8 +273,9 @@ export class NodeLayer {
         const { element, data } = markerObj;
         const isOnline = nodeState.status === 'online';
         const isAck = Boolean(nodeState.isAcknowledged);
+        // Fix: isHoldingSos is true ONLY for the node that is actually storing the message (e.g. N2 flash or isolated dynamic node)
         const isHoldingSos = Boolean(nodeState.storedInFlash) || state.sosStates?.some(
-          s => s.from === nodeState.id && s.state === 'STORED'
+          s => (s.storedAtNode ? s.storedAtNode === nodeState.id : (s.from === nodeState.id && !s.storedAtNode)) && s.state === 'STORED'
         );
 
         const labelEl = element.querySelector('.node-label');
@@ -285,8 +289,8 @@ export class NodeLayer {
           if (subEl) subEl.innerHTML = `<span style="color:#10b981;font-weight:700">RESCUE CONFIRMED</span>`;
         } else if (isHoldingSos) {
           element.classList.add('online', 'waiting-for-mesh');
-          if (labelEl) labelEl.textContent = data.role === 'dongle' || data.isDynamic ? `SURVIVOR · ${data.id}` : `${nodeState.id} · STORED`;
-          if (subEl) subEl.innerHTML = `<span class="stored-text">Stored · Retrying beacon</span>`;
+          if (labelEl) labelEl.textContent = `${nodeState.id} · STORED IN FLASH`;
+          if (subEl) subEl.innerHTML = `<span class="stored-text">Holding SOS · Awaiting aerial bridge</span>`;
         } else if (isOnline) {
           element.classList.add('online');
           const info = this.getNodeDisplayInfo(data, true, false, false);
@@ -379,7 +383,31 @@ export class NodeLayer {
     };
     const rssi = defaultRssi[node.id] || -75;
 
-    if (node.role === 'dongle' || node.isDynamic) {
+    if (node.role === 'drone') {
+      return {
+        primary: `🚁 DRONE · ${node.id}`,
+        sub: '80m Agile Aerial Relay',
+        roleClass: 'role-drone'
+      };
+    }
+
+    if (node.role === 'balloon') {
+      return {
+        primary: `🎈 BALLOON · ${node.id}`,
+        sub: '100m Tethered Aerostat',
+        roleClass: 'role-balloon'
+      };
+    }
+
+    if (node.role === 'helper') {
+      return {
+        primary: '🟢 BASE CAMP · N8',
+        sub: 'Rescue Command HQ',
+        roleClass: 'role-helper'
+      };
+    }
+
+    if (node.role === 'dongle' || (node.isDynamic && node.role !== 'relay')) {
       const primary = `🔴 SURVIVOR · ${node.id}`;
       let sub = node.sublabel || (node.isDynamic ? 'Live Survivor' : 'Balkhu Rooftop');
       if (isAck) {
@@ -390,14 +418,6 @@ export class NodeLayer {
         sub = '⚠ Disconnected';
       }
       return { primary, sub, roleClass: 'role-dongle' };
-    }
-
-    if (node.role === 'helper') {
-      return {
-        primary: '🟢 BASE CAMP · N8',
-        sub: 'Rescue Command HQ',
-        roleClass: 'role-helper'
-      };
     }
 
     if (node.role === 'relay') {

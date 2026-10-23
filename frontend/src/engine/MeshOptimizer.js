@@ -98,7 +98,8 @@ export class MeshOptimizer {
         lat,
         alt_m: 80,
         targetZone: `Between ${bestPair.isolated.id} and ${bestPair.reachable.id}`,
-        gapDistanceMeters: Math.round(bestPair.dist)
+        gapDistanceMeters: Math.round(bestPair.dist),
+        pair: { isolated: bestPair.isolated, reachable: bestPair.reachable }
       });
     }
 
