@@ -33,6 +33,8 @@ export class ScenarioEngine extends DataSource {
     this.dynamicBalloons = new Map();
     this.dynamicEdges = [];
     this.dynamicSosList = [];
+    this.MAX_DRONES = 6; // Maximum drone fleet capacity
+    this.droneCounter = 0;
 
     // Active Operational Mode: 'replay' (scripted 5-phase flood) or 'sandbox' (interactive tactical disaster)
     this.activeMode = 'replay';
@@ -124,6 +126,7 @@ export class ScenarioEngine extends DataSource {
       n1Beacon.beaconAttempts = 0;
     }
     this.dynamicNodeCounter = 0;
+    this.droneCounter = 0;
     this.seek(0);
     this.play();
   }
@@ -176,9 +179,27 @@ export class ScenarioEngine extends DataSource {
 
   /**
    * Tactical Sandbox: Deploy Airborne Drone to precise clicked [lon, lat] coordinates
+   * Enforces 6-Drone Fleet Limit with automatic Aerostat Balloon relief handover.
    */
   dispatchDroneTo(lon, lat, options = {}) {
-    const count = this.dynamicDrones.size + 1;
+    // 1. Enforce 6-Drone Fleet Limit
+    // "if the network is not getting built we will free the drone automatically by setting a balloon there."
+    if (this.dynamicDrones.size >= this.MAX_DRONES) {
+      const oldestDrone = Array.from(this.dynamicDrones.values())[0];
+      if (oldestDrone) {
+        this.dispatchBalloonTo(oldestDrone.lon, oldestDrone.lat, {
+          label: `BALLOON (Auto-Relief ${oldestDrone.id})`
+        });
+        this.emit('aerial', {
+          type: 'auto_balloon_relief',
+          message: `Fleet limit reached (6/6): Promoted ${oldestDrone.id} to 100m Balloon to free drone for new mission!`,
+          droneId: oldestDrone.id
+        });
+      }
+    }
+
+    this.droneCounter = (this.droneCounter || 0) + 1;
+    const count = this.droneCounter;
     const id = options.id || `DR-${count}`;
     const baseCamp = this.scenario.nodes.find(n => n.id === 'N8') || { lon: 85.3160, lat: 27.7020 };
 
@@ -259,6 +280,97 @@ export class ScenarioEngine extends DataSource {
         this.emit('aerial', {
           type: 'drones_online',
           ids: [id],
+          simClock: 'SANDBOX ACTIVE'
+        });
+        this.checkSurvivorBeacons(true);
+      }
+      this.emit('state_update', this.reconstructStateAt(this.currentTime));
+    };
+    requestAnimationFrame(animateFlight);
+
+    return drone;
+  }
+
+  /**
+   * Tactical Sandbox: Rearrange / Reposition existing drone to a new optimal station
+   */
+  repositionDrone(droneId, newLon, newLat, options = {}) {
+    const drone = this.dynamicDrones.get(droneId);
+    if (!drone) return null;
+
+    const oldLon = drone.lon;
+    const oldLat = drone.lat;
+
+    drone.basePos = [oldLon, oldLat];
+    drone.targetPos = [newLon, newLat];
+    drone.lon = newLon;
+    drone.lat = newLat;
+    drone.sublabel = options.targetZone || drone.sublabel;
+    drone.place = `Airborne (80m) at ${newLat.toFixed(4)}, ${newLon.toFixed(4)}`;
+    drone.flightProgress = 0;
+    drone.status = 'online';
+
+    // Clear previous edges for this drone
+    this.dynamicEdges = this.dynamicEdges.filter(e => e.a !== droneId && e.b !== droneId);
+
+    // Form new aerial links at the new station
+    const state = this.reconstructStateAt(this.currentTime);
+    const liveGroundNodes = [
+      ...this.scenario.nodes.filter(n => n.role !== 'drone' && n.role !== 'balloon'),
+      ...Array.from(this.dynamicNodes.values())
+    ].filter(n => {
+      if (this.manualKilledNodes.has(n.id)) return false;
+      const liveNode = state.nodes.find(sn => sn.id === n.id);
+      return liveNode && liveNode.status === 'online';
+    });
+
+    let targets = [];
+    if (options.linkedNodeIds && options.linkedNodeIds.length > 0) {
+      targets = liveGroundNodes.filter(n => options.linkedNodeIds.includes(n.id));
+    }
+    if (targets.length === 0) {
+      const candidates = liveGroundNodes.map(neighbor => ({
+        node: neighbor,
+        dist: this.calculateDistanceMeters(newLon, newLat, neighbor.lon, neighbor.lat)
+      })).filter(c => c.dist <= 850);
+
+      candidates.sort((a, b) => a.dist - b.dist);
+      targets = candidates.slice(0, 2).map(c => c.node);
+    }
+
+    targets.forEach(neighbor => {
+      const dist = this.calculateDistanceMeters(newLon, newLat, neighbor.lon, neighbor.lat);
+      const rawRssi = -60 - 20 * Math.log10(Math.max(10, dist) / 100);
+      const baseRssi = Math.max(-98, Math.min(-62, Math.round(rawRssi)));
+      this.dynamicEdges.push({
+        a: droneId,
+        b: neighbor.id,
+        baseRssi,
+        droneLink: true,
+        isDynamic: true
+      });
+    });
+
+    this.emit('aerial', {
+      type: 'drones_reposition',
+      ids: [droneId],
+      from: [oldLon, oldLat],
+      to: [newLon, newLat],
+      simClock: 'REARRANGING'
+    });
+
+    const startTime = performance.now();
+    const duration = 1200;
+    const animateFlight = (now) => {
+      const p = Math.min(1, (now - startTime) / duration);
+      drone.flightProgress = p;
+      if (p < 1) {
+        requestAnimationFrame(animateFlight);
+      } else {
+        drone.flightProgress = 1;
+        this.emit('aerial', {
+          type: 'drones_online',
+          ids: [droneId],
           simClock: 'SANDBOX ACTIVE'
         });
         this.checkSurvivorBeacons(true);
@@ -383,38 +495,65 @@ export class ScenarioEngine extends DataSource {
   }
 
   /**
-   * Tactical Sandbox: Algorithmic Gap Detection & Automatic Aerial Dispatch
-   * Uses MeshOptimizer to compute disconnect gaps and dispatch needed drones
+   * Tactical Sandbox: Algorithmic Gap Detection, Rearrangement, & Auto-Bridge
+   * Enforces 6-Drone Fleet Limit with automatic Aerostat Balloon relief handover.
    */
   autoBridgeGaps() {
     const state = this.reconstructStateAt(this.currentTime);
-    const gaps = this.meshOptimizer.detectCoverageGaps(state.nodes, state.edges, 'N8');
+    const gaps = this.meshOptimizer.detectAllCoverageGaps(state.nodes, state.edges, 'N8');
+
     if (!gaps || gaps.length === 0) {
       return { 
         needed: 0, 
         drones: [],
-        message: 'Mesh topology fully connected. No signal gaps detected.' 
+        balloons: [],
+        message: 'Mesh topology fully connected. All live nodes have active routes to Base Camp N8.' 
       };
     }
 
-    const dispatched = [];
-    gaps.forEach((gap) => {
-      const linkedNodeIds = gap.pair ? [gap.pair.isolated.id, gap.pair.reachable.id] : undefined;
-      const drone = this.dispatchDroneTo(gap.lon, gap.lat, {
-        label: `DRONE ${this.dynamicDrones.size + 1}`,
-        targetZone: gap.targetZone,
-        linkedNodeIds
+    const currentDrones = Array.from(this.dynamicDrones.values());
+    const plan = this.meshOptimizer.computeRearrangementPlan(currentDrones, gaps, this.MAX_DRONES || 6);
+
+    const executedActions = {
+      repositioned: [],
+      dispatchedDrones: [],
+      deployedBalloons: []
+    };
+
+    // 1. Deploy Aerostat Balloons to relieve and free drones
+    plan.balloonsToDeploy.forEach(b => {
+      const balloon = this.dispatchBalloonTo(b.lon, b.lat, {
+        label: b.replacesDroneId ? `BALLOON (Relief ${b.replacesDroneId})` : `BALLOON (Aerostat Anchor)`
       });
-      dispatched.push({ drone, gap });
+      executedActions.deployedBalloons.push({ balloon, planItem: b });
+    });
+
+    // 2. Rearrange existing drones to their newly assigned bridge positions
+    plan.dronesToReposition.forEach(r => {
+      const drone = this.repositionDrone(r.droneId, r.to[0], r.to[1], {
+        targetZone: r.targetZone,
+        linkedNodeIds: r.linkedNodeIds
+      });
+      if (drone) executedActions.repositioned.push({ drone, planItem: r });
+    });
+
+    // 3. Dispatch new drones (or freed drones) to remaining gaps within 6-drone limit
+    plan.dronesToDispatch.forEach(d => {
+      const drone = this.dispatchDroneTo(d.lon, d.lat, {
+        label: `DRONE ${(this.droneCounter || this.dynamicDrones.size) + 1}`,
+        targetZone: d.targetZone,
+        linkedNodeIds: d.linkedNodeIds
+      });
+      if (drone) executedActions.dispatchedDrones.push({ drone, planItem: d });
     });
 
     this.checkSurvivorBeacons(true);
 
     return { 
       needed: gaps.length, 
-      drones: dispatched,
-      gap: gaps[0],
-      message: `Mesh Optimizer: Dispatched ${gaps.length} drone(s) to bridge severed corridor!` 
+      plan,
+      actions: executedActions,
+      message: plan.summary 
     };
   }
 
@@ -731,6 +870,7 @@ export class ScenarioEngine extends DataSource {
       n1Beacon.beaconAttempts = 0;
     }
     this.dynamicNodeCounter = 0;
+    this.droneCounter = 0;
     const state = this.reconstructStateAt(this.currentTime);
     this.emit('state_update', state);
   }

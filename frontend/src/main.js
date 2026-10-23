@@ -155,6 +155,18 @@ mapManager.init().then(map => {
     if (el('stat-nodes')) el('stat-nodes').textContent = `${onlineCount} / ${totalCount}`;
   }
 
+  function updateFleetStatus() {
+    const fleetEl = document.getElementById('sb-fleet-status');
+    if (!fleetEl) return;
+    const droneCount = engine.dynamicDrones?.size || 0;
+    const balloonCount = engine.dynamicBalloons?.size || 0;
+    const maxDrones = engine.MAX_DRONES || 6;
+    const isFull = droneCount >= maxDrones;
+    fleetEl.textContent = `DRONES: ${droneCount}/${maxDrones}${isFull ? ' (MAX)' : ''} · BALLOONS: ${balloonCount}`;
+    fleetEl.style.borderColor = isFull ? '#ffb020' : 'rgba(255,176,32,0.4)';
+    fleetEl.style.background = isFull ? 'rgba(255,176,32,0.25)' : 'rgba(255,176,32,0.12)';
+  }
+
   // ─── Engine Event Routing ──────────────────────────────────────────────────
   engine.on('state_update', (state) => {
     updateAlert(state);
@@ -164,6 +176,7 @@ mapManager.init().then(map => {
     updateSidebar(state);
     inbox.update(state);
     updateTimeline(state);
+    updateFleetStatus();
   });
 
   engine.on('state_reset', (state) => {
@@ -176,6 +189,7 @@ mapManager.init().then(map => {
     updateSidebar(state);
     inbox.reset();
     updateTimeline(state);
+    updateFleetStatus();
   });
 
   // Real-time interactive packet transmission (animates live independent of timeline)
@@ -241,7 +255,7 @@ mapManager.init().then(map => {
           <span class="log-time">${evt.simClock || 'DISPATCH'}</span>
           <span class="log-tag" style="background:#00f0ff22;color:#00f0ff;border:1px solid #00f0ff">SCRAMBLE</span>
         </div>
-        <div class="log-detail" style="color:#00f0ff">[DISPATCH] Base Camp scrambled ${evt.ids.join(', ')} to flooded sector</div>
+        <div class="log-detail" style="color:#00f0ff">[DISPATCH] Base Camp scrambled ${evt.ids.join(', ')} to target station</div>
       `;
       logFeed.prepend(item);
       while (logFeed.children.length > 8) logFeed.removeChild(logFeed.lastChild);
@@ -253,7 +267,55 @@ mapManager.init().then(map => {
           <span class="log-time">${evt.simClock || 'ACTIVE'}</span>
           <span class="log-tag" style="background:#00f0ff22;color:#00f0ff;border:1px solid #00f0ff">AERIAL LOCK</span>
         </div>
-        <div class="log-detail" style="color:#00f0ff">[ACTIVE] ${evt.ids.join(', ')} hovering at 80m · Grid relay active!</div>
+        <div class="log-detail" style="color:#00f0ff">[ACTIVE] ${evt.ids.join(', ')} hovering at 80m · RF bridge active</div>
+      `;
+      logFeed.prepend(item);
+      while (logFeed.children.length > 8) logFeed.removeChild(logFeed.lastChild);
+    } else if (evt.type === 'drones_reposition') {
+      const item = document.createElement('div');
+      item.className = 'log-item';
+      item.innerHTML = `
+        <div class="log-meta">
+          <span class="log-time">${evt.simClock || 'REARRANGE'}</span>
+          <span class="log-tag" style="background:#ffb02022;color:#ffb020;border:1px solid #ffb020">FLEET SHIFT</span>
+        </div>
+        <div class="log-detail" style="color:#ffb020">[OPTIMIZER] ${evt.ids.join(', ')} repositioning to cover priority gap within 6-drone limit</div>
+      `;
+      logFeed.prepend(item);
+      while (logFeed.children.length > 8) logFeed.removeChild(logFeed.lastChild);
+    } else if (evt.type === 'auto_balloon_relief') {
+      const item = document.createElement('div');
+      item.className = 'log-item';
+      item.innerHTML = `
+        <div class="log-meta">
+          <span class="log-time">AUTO-RELIEF</span>
+          <span class="log-tag" style="background:#00e5ff22;color:#00e5ff;border:1px solid #00e5ff">AEROSTAT ANCHOR</span>
+        </div>
+        <div class="log-detail" style="color:#00e5ff;font-weight:600">[RELIEF] ${evt.message || 'Deployed 100m Balloon to free drone for new mission'}</div>
+      `;
+      logFeed.prepend(item);
+      while (logFeed.children.length > 8) logFeed.removeChild(logFeed.lastChild);
+    } else if (evt.type === 'balloons_launch') {
+      const item = document.createElement('div');
+      item.className = 'log-item';
+      item.innerHTML = `
+        <div class="log-meta">
+          <span class="log-time">${evt.simClock || 'ASCENT'}</span>
+          <span class="log-tag" style="background:#00e5ff22;color:#00e5ff;border:1px solid #00e5ff">BALLOON</span>
+        </div>
+        <div class="log-detail" style="color:#00e5ff">[BALLOON] ${evt.ids.join(', ')} ascending to 100m tethered altitude</div>
+      `;
+      logFeed.prepend(item);
+      while (logFeed.children.length > 8) logFeed.removeChild(logFeed.lastChild);
+    } else if (evt.type === 'drones_return') {
+      const item = document.createElement('div');
+      item.className = 'log-item';
+      item.innerHTML = `
+        <div class="log-meta">
+          <span class="log-time">${evt.simClock || 'HANDOVER'}</span>
+          <span class="log-tag" style="background:#10b98122;color:#10b981;border:1px solid #10b981">HANDOVER</span>
+        </div>
+        <div class="log-detail" style="color:#10b981">[HANDOVER] ${evt.ids.join(', ')} station handed over to Aerostat · Drone freed</div>
       `;
       logFeed.prepend(item);
       while (logFeed.children.length > 8) logFeed.removeChild(logFeed.lastChild);
@@ -325,6 +387,7 @@ mapManager.init().then(map => {
       if (sandboxBar)  sandboxBar.classList.remove('hidden');
       if (sourceBadge) sourceBadge.textContent = 'Sandbox';
     }
+    updateFleetStatus();
   }
 
   if (btnReplay)  btnReplay.addEventListener('click', () => setMode('replay'));
@@ -571,16 +634,19 @@ mapManager.init().then(map => {
     const res = engine.autoBridgeGaps();
     const hint = document.querySelector('.sandbox-hint');
     if (hint) {
-      hint.textContent = res.needed > 0
-        ? `AI Mesh Optimizer: Dispatched ${res.needed} aerial drone bridge(s) to reconnect isolated nodes!`
-        : `AI Mesh Optimizer: Mesh fully connected. All live nodes have active routes to Base Camp N8.`;
-      hint.style.color = res.needed > 0 ? '#00f0ff' : '#10b981';
+      if (res.needed > 0) {
+        hint.textContent = `AI Optimizer (6-Drone Max): ${res.message || 'Optimized mesh topology'}`;
+        hint.style.color = '#00f0ff';
+      } else {
+        hint.textContent = `AI Mesh Optimizer: Mesh fully connected. All live nodes have active routes to Base Camp N8.`;
+        hint.style.color = '#10b981';
+      }
       setTimeout(() => {
         if (hint) {
           hint.textContent = 'Interactive Mode: Select a tactical tool to test dynamic routing';
           hint.style.color = '';
         }
-      }, 4500);
+      }, 5500);
     }
     if (logFeed) {
       const item = document.createElement('div');
@@ -588,13 +654,14 @@ mapManager.init().then(map => {
       item.innerHTML = `
         <div class="log-meta">
           <span class="log-time">OPTIMIZER</span>
-          <span class="log-tag" style="background:#00f0ff22;color:#00f0ff;border:1px solid #00f0ff">AI DISPATCH</span>
+          <span class="log-tag" style="background:#00f0ff22;color:#00f0ff;border:1px solid #00f0ff">6-DRONE FLEET</span>
         </div>
         <div class="log-detail" style="color:#00f0ff">${res.message || 'Scanned network topology.'}</div>
       `;
       logFeed.prepend(item);
       while (logFeed.children.length > 8) logFeed.removeChild(logFeed.lastChild);
     }
+    updateFleetStatus();
   });
 
   document.getElementById('sb-reset')?.addEventListener('click', () => {
@@ -722,6 +789,7 @@ function injectBottomBars() {
     sb.innerHTML = `
       <div class="sandbox-left">
         <span class="sandbox-badge">TACTICAL SANDBOX</span>
+        <span class="sandbox-fleet-badge" id="sb-fleet-status" style="margin-left:8px;font-size:11px;padding:2px 8px;border-radius:4px;background:rgba(255,176,32,0.15);border:1px solid rgba(255,176,32,0.4);color:#ffb020;font-family:monospace;letter-spacing:0.5px;">DRONES: 0/6 · BALLOONS: 0</span>
         <span class="sandbox-hint">Interactive Mode: Select a tactical tool to test dynamic routing</span>
       </div>
       <div class="sandbox-tools">
@@ -731,13 +799,13 @@ function injectBottomBars() {
         <button class="sb-tool-btn" id="sb-kill-node" title="Click any blue relay to submerge it under rising floodwaters">
           Submerge Relay
         </button>
-        <button class="sb-tool-btn" id="sb-drone" title="Click anywhere on map to dispatch drone from Base Camp">
+        <button class="sb-tool-btn" id="sb-drone" title="Dispatch aerial drone (Fleet limit 6 · Auto-promotes stationed drone to balloon if exceeded)">
           Deploy Drone
         </button>
-        <button class="sb-tool-btn" id="sb-balloon" title="Click anywhere on map to anchor a 100m aerostat balloon">
+        <button class="sb-tool-btn" id="sb-balloon" title="Anchor high-altitude 100m aerostat balloon (Unlimited count)">
           Deploy Balloon
         </button>
-        <button class="sb-tool-btn" id="sb-auto" title="Run MeshOptimizer algorithmic gap analysis and auto-bridge with drones">
+        <button class="sb-tool-btn" id="sb-auto" title="Run MeshOptimizer to dynamically rearrange drones within 6-drone limit & auto-place relief balloons">
           Auto Gap-Bridge
         </button>
         <button class="sb-tool-btn" id="sb-reset" title="Clear dynamic nodes & reset network">

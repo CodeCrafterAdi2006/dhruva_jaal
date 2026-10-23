@@ -140,11 +140,16 @@ export class LinkPacketLayer {
     if (nodeData.role === 'drone') {
       const droneState = fromState || nodeData;
       if (droneState && droneState.visible && droneState.flightProgress > 0) {
-        const base = this.scenario.nodes.find(n => n.id === 'N8') || { lon: 85.3160, lat: 27.7020 };
+        const base = droneState.basePos
+          ? { lon: droneState.basePos[0], lat: droneState.basePos[1] }
+          : (this.scenario.nodes.find(n => n.id === 'N8') || { lon: 85.3160, lat: 27.7020 });
+        const target = droneState.targetPos
+          ? { lon: droneState.targetPos[0], lat: droneState.targetPos[1] }
+          : { lon: nodeData.lon, lat: nodeData.lat };
         const p = droneState.flightProgress;
         return [
-          base.lon + p * (nodeData.lon - base.lon),
-          base.lat + p * (nodeData.lat - base.lat)
+          base.lon + p * (target.lon - base.lon),
+          base.lat + p * (target.lat - base.lat)
         ];
       }
     }

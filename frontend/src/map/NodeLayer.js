@@ -323,6 +323,9 @@ export class NodeLayer {
         }
         if (!markerObj) return;
 
+        if (nodeState.basePos) markerObj.basePos = nodeState.basePos;
+        if (nodeState.targetPos) markerObj.targetPos = nodeState.targetPos;
+
         const { marker, element, data, basePos, targetPos } = markerObj;
         const isVisible = nodeState.visible && nodeState.flightProgress > 0;
 
