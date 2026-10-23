@@ -44,6 +44,15 @@ export class ScenarioEngine extends DataSource {
 
   setActiveMode(mode) {
     this.activeMode = mode;
+    if (mode === 'sandbox') {
+      const n1Beacon = this.survivorBeacons.get('N1');
+      if (n1Beacon) {
+        n1Beacon.isAcknowledged = false;
+        n1Beacon.storedInFlash = false;
+        n1Beacon.lastBeaconTimestamp = 0;
+        n1Beacon.beaconAttempts = 0;
+      }
+    }
     this.emit('mode_changed', { mode });
     this.emit('state_update', this.reconstructStateAt(this.currentTime));
   }
@@ -95,10 +104,26 @@ export class ScenarioEngine extends DataSource {
     this.manualKilledNodes.clear();
     this.manualAerialDeployed.clear();
     this.manualAerialTrigger = null;
+    this.dynamicNodes.clear();
     this.dynamicDrones.clear();
     this.dynamicBalloons.clear();
     this.dynamicEdges = [];
     this.dynamicSosList = [];
+    this.survivorBeacons.clear();
+    this.registerSurvivorBeacon('N1', {
+      people: 4,
+      need: 'RESCUE',
+      battery: 18,
+      text: 'BALKHU ROOFTOP: Water rising above 2.8m. 4 people trapped on tin roof. Immediate boat rescue needed.'
+    });
+    const n1Beacon = this.survivorBeacons.get('N1');
+    if (n1Beacon) {
+      n1Beacon.isAcknowledged = false;
+      n1Beacon.storedInFlash = false;
+      n1Beacon.lastBeaconTimestamp = 0;
+      n1Beacon.beaconAttempts = 0;
+    }
+    this.dynamicNodeCounter = 0;
     this.seek(0);
     this.play();
   }
@@ -118,7 +143,8 @@ export class ScenarioEngine extends DataSource {
     // Re-check all active survivor beacons to see if routes are broken or need re-routing
     const state = this.reconstructStateAt(this.currentTime);
     this.survivorBeacons.forEach(survivor => {
-      if (survivor.id !== 'N1' && !survivor.isAcknowledged) {
+      const isSandboxN1 = this.activeMode === 'sandbox' && survivor.id === 'N1';
+      if ((survivor.id !== 'N1' || isSandboxN1) && !survivor.isAcknowledged) {
         const path = this.findShortestPath(survivor.id, 'N8', state);
         if (!path) {
           survivor.storedInFlash = true;
@@ -235,7 +261,7 @@ export class ScenarioEngine extends DataSource {
           ids: [id],
           simClock: 'SANDBOX ACTIVE'
         });
-        this.checkSurvivorBeacons();
+        this.checkSurvivorBeacons(true);
       }
       this.emit('state_update', this.reconstructStateAt(this.currentTime));
     };
@@ -347,7 +373,7 @@ export class ScenarioEngine extends DataSource {
           ids: [id],
           simClock: 'AEROSTAT ONLINE'
         });
-        this.checkSurvivorBeacons();
+        this.checkSurvivorBeacons(true);
       }
       this.emit('state_update', this.reconstructStateAt(this.currentTime));
     };
@@ -381,6 +407,8 @@ export class ScenarioEngine extends DataSource {
       });
       dispatched.push({ drone, gap });
     });
+
+    this.checkSurvivorBeacons(true);
 
     return { 
       needed: gaps.length, 
@@ -425,10 +453,9 @@ export class ScenarioEngine extends DataSource {
    * Drop / Spawn Dynamic Survivor or Relay Node anywhere on map
    */
   spawnDynamicNode(lon, lat, options = {}) {
-    const count = this.dynamicNodes.size + 1;
-    const id = options.id || `DYN-${count}`;
+    this.dynamicNodeCounter = (this.dynamicNodeCounter || 0) + 1;
+    const id = options.id || `DYN-${this.dynamicNodeCounter}`;
     const role = options.role || 'dongle';
-    const label = role === 'dongle' ? `SURVIVOR ${count}` : `RELAY ${count}`;
 
     const node = {
       id,
@@ -442,28 +469,33 @@ export class ScenarioEngine extends DataSource {
       status: 'online',
       visible: true,
       flightProgress: 1,
-      isDynamic: true
+      isDynamic: true,
+      isAcknowledged: false,
+      storedInFlash: false
     };
 
     this.dynamicNodes.set(id, node);
 
-    // Form physically realistic radio links to all nodes within range
-    const allExistingNodes = [
-      ...this.scenario.nodes,
-      ...Array.from(this.dynamicNodes.values()).filter(n => n.id !== id)
-    ];
+    // Form physically realistic radio links to living nodes within range (<= 850m for ground, <= 1200m for active aerials)
+    const state = this.reconstructStateAt(this.currentTime);
+    const liveNeighbors = state.nodes.filter(n =>
+      n.id !== id &&
+      n.status === 'online' &&
+      n.visible &&
+      !this.manualKilledNodes.has(n.id)
+    );
 
-    allExistingNodes.forEach(neighbor => {
+    liveNeighbors.forEach(neighbor => {
       const dist = this.calculateDistanceMeters(lon, lat, neighbor.lon, neighbor.lat);
       const isAerial = neighbor.role === 'drone' || neighbor.role === 'balloon';
-      const maxRange = isAerial ? (neighbor.role === 'balloon' ? 3500 : 2500) : 850;
+      const maxRange = isAerial ? (neighbor.role === 'balloon' ? 1200 : 850) : 850;
 
       if (dist <= maxRange) {
         // Physical log-distance path loss
         const rawRssi = isAerial
-          ? -60 - 20 * Math.log10(dist / 100)
-          : -68 - 32 * Math.log10(dist / 100);
-        const baseRssi = Math.max(-115, Math.min(-62, Math.round(rawRssi)));
+          ? -60 - 20 * Math.log10(Math.max(10, dist) / 100)
+          : -68 - 32 * Math.log10(Math.max(10, dist) / 100);
+        const baseRssi = Math.max(-105, Math.min(-62, Math.round(rawRssi)));
 
         this.dynamicEdges.push({
           a: id,
@@ -476,18 +508,28 @@ export class ScenarioEngine extends DataSource {
       }
     });
 
-    // Register survivor and trigger first distress beacon
-    this.registerSurvivorBeacon(id, {
-      people: 2,
-      need: 'RESCUE',
+    // Register fresh survivor beacon as UNACKNOWLEDGED (RED)
+    const survivor = {
+      id,
+      isAcknowledged: false,
+      lastBeaconTimestamp: 0,
+      beaconIntervalSeconds: 12,
+      beaconAttempts: 0,
+      people: options.people || 2,
+      need: options.need || 'RESCUE',
       battery: 88,
-      text: `EMERGENCY: Stranded survivor at ${id} (${lat.toFixed(4)}, ${lon.toFixed(4)}). Immediate rescue needed.`
-    });
+      text: options.text || `EMERGENCY: Stranded survivor at ${id} (${lat.toFixed(4)}, ${lon.toFixed(4)}). Immediate rescue required.`,
+      storedInFlash: false
+    };
+    this.survivorBeacons.set(id, survivor);
+    this.ensureBeaconLoop();
+
+    // Trigger initial distress beacon flight
     this.fireSurvivorBeacon(id);
 
-    const state = this.reconstructStateAt(this.currentTime);
-    this.emit('state_update', state);
-    this.emit('node_spawned', { node, state });
+    const updatedState = this.reconstructStateAt(this.currentTime);
+    this.emit('state_update', updatedState);
+    this.emit('node_spawned', { node, state: updatedState });
     return node;
   }
 
@@ -497,6 +539,12 @@ export class ScenarioEngine extends DataSource {
   registerSurvivorBeacon(nodeId, config = {}) {
     if (this.survivorBeacons.has(nodeId)) {
       const s = this.survivorBeacons.get(nodeId);
+      if (config.forceReset) {
+        s.isAcknowledged = false;
+        s.storedInFlash = false;
+        s.lastBeaconTimestamp = 0;
+        s.beaconAttempts = 0;
+      }
       if (config.text) s.text = config.text;
       return s;
     }
@@ -505,7 +553,7 @@ export class ScenarioEngine extends DataSource {
       id: nodeId,
       isAcknowledged: false,
       lastBeaconTimestamp: 0,
-      beaconIntervalSeconds: 16, // Real-world LoRa distress beacon interval
+      beaconIntervalSeconds: 12, // 12s LoRa distress beacon interval
       beaconAttempts: 0,
       people: config.people || 2,
       need: config.need || 'RESCUE',
@@ -526,14 +574,15 @@ export class ScenarioEngine extends DataSource {
     }, 2500);
   }
 
-  checkSurvivorBeacons() {
+  checkSurvivorBeacons(force = false) {
     const now = performance.now();
     this.survivorBeacons.forEach(survivor => {
-      // N1 is controlled deterministically by scenario timeline; skip in background loop
-      if (survivor.id === 'N1' || survivor.isAcknowledged) return;
+      // In Replay mode, N1 is controlled deterministically by scenario timeline
+      if (this.activeMode === 'replay' && survivor.id === 'N1') return;
+      if (survivor.isAcknowledged) return;
 
       const elapsed = (now - survivor.lastBeaconTimestamp) / 1000;
-      if (survivor.lastBeaconTimestamp === 0 || elapsed >= survivor.beaconIntervalSeconds) {
+      if (force || survivor.lastBeaconTimestamp === 0 || elapsed >= survivor.beaconIntervalSeconds) {
         this.fireSurvivorBeacon(survivor.id);
       }
     });
@@ -659,12 +708,29 @@ export class ScenarioEngine extends DataSource {
   }
 
   /**
-   * Clear all dynamic nodes
+   * Clear all dynamic nodes, aerials, and reset survivor beacons
    */
   clearDynamicNodes() {
     this.dynamicNodes.clear();
+    this.dynamicDrones.clear();
+    this.dynamicBalloons.clear();
     this.dynamicEdges = [];
     this.dynamicSosList = [];
+    this.survivorBeacons.clear();
+    this.registerSurvivorBeacon('N1', {
+      people: 4,
+      need: 'RESCUE',
+      battery: 18,
+      text: 'BALKHU ROOFTOP: Water rising above 2.8m. 4 people trapped on tin roof. Immediate boat rescue needed.'
+    });
+    const n1Beacon = this.survivorBeacons.get('N1');
+    if (n1Beacon) {
+      n1Beacon.isAcknowledged = false;
+      n1Beacon.storedInFlash = false;
+      n1Beacon.lastBeaconTimestamp = 0;
+      n1Beacon.beaconAttempts = 0;
+    }
+    this.dynamicNodeCounter = 0;
     const state = this.reconstructStateAt(this.currentTime);
     this.emit('state_update', state);
   }
@@ -1228,13 +1294,18 @@ export class ScenarioEngine extends DataSource {
     });
 
     // N1 survivor distress cycles across timeline parts:
-    // - t < 12.65: Active distress before SOS1 ACK arrives (RED)
-    // - 12.65 <= t < 18.0: SOS1 confirmed by ACK arrival at N1 (GREEN)
-    // - 18.0 <= t < 58.8: Reset to RED for Part 2! Message gets stuck at N2, drone bridges, balloon takes over
-    // - t >= 58.8: Balloon ACK arrives at N1! Confirmed (GREEN)
+    // - In sandbox mode: determined dynamically by survivorBeacons ACK receipt
+    // - In replay mode:
+    //   - t < 12.65: Active distress before SOS1 ACK arrives (RED)
+    //   - 12.65 <= t < 18.0: SOS1 confirmed by ACK arrival at N1 (GREEN)
+    //   - 18.0 <= t < 58.8: Reset to RED for Part 2! Message gets stuck at N2, drone bridges, balloon takes over
+    //   - t >= 58.8: Balloon ACK arrives at N1! Confirmed (GREEN)
     if (activeNodes.has('N1')) {
       let isN1Ack = false;
-      if (this.withMesh) {
+      const n1Beacon = this.survivorBeacons.get('N1');
+      if (this.activeMode === 'sandbox') {
+        isN1Ack = Boolean(n1Beacon?.isAcknowledged);
+      } else if (this.withMesh) {
         if (t >= 12.65 && t < 18.0) {
           isN1Ack = true;
         } else if (t >= 58.8) {
@@ -1242,7 +1313,6 @@ export class ScenarioEngine extends DataSource {
         }
       }
       activeNodes.get('N1').isAcknowledged = isN1Ack;
-      const n1Beacon = this.survivorBeacons.get('N1');
       activeNodes.get('N1').storedInFlash = Boolean(n1Beacon?.storedInFlash);
       activeNodes.get('N1').beaconAttempts = n1Beacon?.beaconAttempts || 0;
     }
@@ -1267,10 +1337,12 @@ export class ScenarioEngine extends DataSource {
     // Evaluate all SOS messages up to t (scenario timeline + dynamic user SOS)
     const sosStates = [];
     const deliveredSos = [];
-    const allSos = [
-      ...this.scenario.timeline.filter(item => item.type === 'sos'),
-      ...this.dynamicSosList
-    ];
+    const allSos = this.activeMode === 'sandbox'
+      ? [...this.dynamicSosList]
+      : [
+          ...this.scenario.timeline.filter(item => item.type === 'sos'),
+          ...this.dynamicSosList
+        ];
     allSos.forEach(sosItem => {
       if (sosItem.isDynamic) {
         sosStates.push(sosItem);

@@ -217,10 +217,15 @@ export class LinkPacketLayer {
 
     const activeLive = [];
     const liveFeatures = [];
+    const currentTime = (typeof now === 'number' && now > 0) ? now : performance.now();
 
-    for (const packet of this.livePackets) {
+    // Snapshot existing packets so newly queued packets (e.g. return ACK inside onDelivered) are preserved
+    const packetsToProcess = [...this.livePackets];
+    this.livePackets = [];
+
+    for (const packet of packetsToProcess) {
       const totalHops = packet.path.length - 1;
-      const elapsed = (now - packet.startTime) / 1000;
+      const elapsed = (currentTime - packet.startTime) / 1000;
       const hopFloat = elapsed / packet.hopSeconds;
 
       if (hopFloat >= totalHops) {
@@ -271,7 +276,8 @@ export class LinkPacketLayer {
       }
     }
 
-    this.livePackets = activeLive;
+    // Retain both surviving active packets AND any newly launched packets (like return ACK)
+    this.livePackets = [...activeLive, ...this.livePackets];
 
     // Combine with timeline packets
     const timelineFeatures = this.getTimelinePacketFeatures(this.lastState);
