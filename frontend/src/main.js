@@ -173,6 +173,51 @@ mapManager.init().then(map => {
     updateTimeline(state);
   });
 
+  engine.on('node_status', (evt) => {
+    if (logFeed && evt.status === 'down') {
+      const item = document.createElement('div');
+      item.className = 'log-item log-item-down';
+      item.innerHTML = `
+        <div class="log-meta">
+          <span class="log-time">${evt.simClock || 'ALERT'}</span>
+          <span class="log-tag state-failed">DOWN</span>
+        </div>
+        <div class="log-detail" style="color:#ff6b6b">⚠ Node ${evt.id} DOWN · ${evt.reason || 'Flooded'}</div>
+      `;
+      logFeed.prepend(item);
+      while (logFeed.children.length > 8) logFeed.removeChild(logFeed.lastChild);
+    }
+  });
+
+  engine.on('aerial', (evt) => {
+    if (!logFeed) return;
+    if (evt.type === 'drones_launch') {
+      const item = document.createElement('div');
+      item.className = 'log-item';
+      item.innerHTML = `
+        <div class="log-meta">
+          <span class="log-time">${evt.simClock || 'DISPATCH'}</span>
+          <span class="log-tag" style="background:#00f0ff22;color:#00f0ff;border:1px solid #00f0ff">SCRAMBLE</span>
+        </div>
+        <div class="log-detail" style="color:#00f0ff">🚁 Base Camp scrambled ${evt.ids.join(', ')} to flooded sector</div>
+      `;
+      logFeed.prepend(item);
+      while (logFeed.children.length > 8) logFeed.removeChild(logFeed.lastChild);
+    } else if (evt.type === 'drones_online') {
+      const item = document.createElement('div');
+      item.className = 'log-item';
+      item.innerHTML = `
+        <div class="log-meta">
+          <span class="log-time">${evt.simClock || 'ACTIVE'}</span>
+          <span class="log-tag" style="background:#00f0ff22;color:#00f0ff;border:1px solid #00f0ff">AERIAL LOCK</span>
+        </div>
+        <div class="log-detail" style="color:#00f0ff">🔒 ${evt.ids.join(', ')} hovering at 80m · Grid relay active!</div>
+      `;
+      logFeed.prepend(item);
+      while (logFeed.children.length > 8) logFeed.removeChild(logFeed.lastChild);
+    }
+  });
+
   // ─── With / Without Mesh Toggle ────────────────────────────────────────────
   const btnWith    = document.getElementById('btn-with-mesh');
   const btnWithout = document.getElementById('btn-without-mesh');

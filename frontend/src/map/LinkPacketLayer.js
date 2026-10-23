@@ -49,20 +49,6 @@ export class LinkPacketLayer {
         }
       });
 
-      // Dashed inactive / down links
-      this.map.addLayer({
-        id: 'mesh-links-inactive',
-        type: 'line',
-        source: this.linksSourceId,
-        filter: ['==', ['get', 'active'], false],
-        paint: {
-          'line-color': '#475569',
-          'line-width': 1.2,
-          'line-opacity': 0.35,
-          'line-dasharray': [3, 3]
-        }
-      });
-
       // --- Packets Source (ONLY real SOS orbs — no ambient noise) ---
       this.map.addSource(this.packetsSourceId, {
         type: 'geojson',
@@ -166,6 +152,9 @@ export class LinkPacketLayer {
 
       const isActive = withMesh && aOnline && bOnline;
 
+      // STRICT USER CONSTRAINT: When a node is down, all its lines MUST completely vanish!
+      if (!isActive) return;
+
       // EMA RSSI breathing (±1.5 dB)
       const edgeKey = `${edge.a}-${edge.b}`;
       const seed = index * 1.37;
@@ -176,22 +165,38 @@ export class LinkPacketLayer {
 
       const liveRssi = (edge.baseRssi || -75) + jitter;
 
-      let color = '#2EE66B';                      // strong ≥ −80
-      if (liveRssi < -100) color = '#FF3B3B';    // weak
-      else if (liveRssi < -80) color = '#FFB020'; // medium
-      if (!isActive) color = '#475569';
+      // Differentiate Ground vs Drone vs Balloon links
+      let color = '#2EE66B'; // Strong ground link ≥ −80
+      let coreWidth = 2.4;
+      let glowWidth = 6.5;
+      let glowOpacity = 0.40;
+
+      if (edge.droneLink) {
+        color = '#00F0FF'; // Agile Drone aerial link (tactical cyan)
+        coreWidth = 2.6;
+        glowWidth = 8.5;
+        glowOpacity = 0.65;
+      } else if (edge.balloonLink) {
+        color = '#A78BFA'; // Tethered Balloon stratospheric link (tactical violet)
+        coreWidth = 2.8;
+        glowWidth = 9.0;
+        glowOpacity = 0.70;
+      } else {
+        if (liveRssi < -100) color = '#FF3B3B'; // Weak
+        else if (liveRssi < -80) color = '#FFB020'; // Medium
+      }
 
       linkFeatures.push({
         type: 'Feature',
         geometry: { type: 'LineString', coordinates: [coordA, coordB] },
         properties: {
           id: edgeKey,
-          active: isActive,
+          active: true,
           color,
-          opacity:      isActive ? 0.90 : 0.30,
-          glowOpacity:  isActive ? 0.40 : 0.00,
-          coreWidth:    isActive ? 2.4  : 1.2,
-          glowWidth:    isActive ? 7.0  : 0.0,
+          opacity: 0.95,
+          glowOpacity,
+          coreWidth,
+          glowWidth,
           rssi: Math.round(liveRssi)
         }
       });

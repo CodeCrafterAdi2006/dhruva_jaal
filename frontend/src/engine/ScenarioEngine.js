@@ -353,6 +353,16 @@ export class ScenarioEngine extends DataSource {
       });
     }
 
+    // Apply dynamic geographic flood inundation rule
+    if (activeNodes.has('N3') && t >= 21.5) {
+      activeNodes.get('N3').status = 'down';
+      activeNodes.get('N3').reason = 'Submerged by Bagmati flash surge (2.8m water)';
+    }
+    if (activeNodes.has('N6') && t >= 39.5) {
+      activeNodes.get('N6').status = 'down';
+      activeNodes.get('N6').reason = 'Submerged by downstream flood surge (4.1m water)';
+    }
+
     // Apply manual user overrides (Simulate Disaster / 'K' key)
     this.manualKilledNodes.forEach(id => {
       if (activeNodes.has(id)) {
