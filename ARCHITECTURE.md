@@ -97,41 +97,17 @@ $$T_{\text{packet}} = 50.25 \times 8.192\text{ ms} = 411.6\text{ ms}$$
 
 ---
 
-## 3. Firmware Architecture & State Machines (`firmware/`)
+## 3. Firmware Architecture & State Machines (`firmware/firmware.ino`)
 
-### 3.1 Memory Partitioning (`partitions.csv`)
-The ESP32-C3's 4MB flash is partitioned to support zero-loss disaster caching:
+The embedded layer is implemented as a unified C++ Arduino sketch with multi-role execution flags (`IS_DONGLE`, `IS_RELAY`, `IS_HELPER`):
 
-| Name | Type | Subtype | Offset | Size | Purpose |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| `nvs` | `data` | `nvs` | `0x9000` | `20 KB` | Persistent node ID, encryption keys & calibration |
-| `otadata` | `data` | `ota` | `0xe000` | `8 KB` | Dual OTA bootloader state |
-| `app0` | `app` | `ota_0` | `0x10000` | `1.25 MB` | Primary firmware image |
-| `app1` | `app` | `ota_1` | `0x150000` | `1.25 MB` | Recovery / fallback firmware image |
-| `storage` | `data` | `spiffs`| `0x290000` | `1.43 MB` | **Raw Circular Flash Buffer (Store-and-Forward SOS Store)** |
+### 3.1 Non-Volatile Flash Persistence & Store-and-Forward
+The firmware leverages the ESP32-C3 hardware `Preferences` EEPROM/NVS abstraction backed by onboard SPI flash:
+* **Persistent Keys:** Sequence counters, neighbor routing tables, and pending emergency records are indexed by 32-bit `msg_id`.
+* **State Progression:** When links are severed, the record status moves to `WAITING` or `STORED`. The node listens for incoming HELLO beacons before scheduling retransmissions.
+* **JSON Event Streaming:** The firmware outputs JSON event lines on USB CDC-ACM prefixed with `@` (e.g. `{"ev":"data_rx",...}`, `{"ev":"nbr",...}`) for dashboards/digital twins, and standard JSON lines `{"type":"status",...}` for the phone PWA.
 
-### 3.2 Non-Volatile Store-and-Forward Engine (`store.cpp`)
-The storage engine treats the `storage` partition as a circular FIFO buffer:
-* **Record Structure:**
-  ```cpp
-  struct __attribute__((packed)) SosRecord {
-    uint32_t magic;          // 0xD4B80001 (Integrity magic)
-    uint32_t messageId;      // Unique sequence number + sender hash
-    uint32_t timestamp;      // UNIX epoch timestamp
-    int32_t  latE7;          // Latitude * 1e7 (-90.0 to +90.0)
-    int32_t  lonE7;          // Longitude * 1e7 (-180.0 to +180.0)
-    uint8_t  priority;       // 1 = High/Medical, 2 = Medium/Rescue, 3 = Low/Food
-    uint8_t  peopleCount;    // Headcount trapped at location
-    uint8_t  flags;          // Bit 0: Medical, Bit 1: Trapped, Bit 2: Food/Water
-    uint8_t  status;         // 0: SAVED, 1: TRANSMITTING, 2: ACKED
-    uint8_t  retryCount;     // Retransmission attempt counter
-    uint8_t  payload[16];    // Text snippet / caller info
-    uint8_t  crc8;           // Record checksum
-  };
-  ```
-* **Flash Wear Leveling:** Records append sequentially across $4\text{ KB}$ sectors. A sector is erased only when the circular pointer wraps around after $24{,}000+$ stored events.
-
-### 3.3 Channel Access: Hybrid Slotted ALOHA with CAD (`mac.cpp`)
+### 3.2 Channel Access: Hybrid Slotted ALOHA with CAD
 
 ```mermaid
 stateDiagram-v2

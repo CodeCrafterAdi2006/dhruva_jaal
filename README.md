@@ -63,19 +63,9 @@ This repository houses the entire Dhruva Jaal stack, divided cleanly into produc
 octo_gdg_hackathon/
 ├── README.md                      # Master all-in-one RAG-indexed documentation
 ├── ARCHITECTURE.md                # Mathematical, RF physics & algorithmic specifications
-├── firmware/                      # Bare-metal C++ / Arduino ESP32-C3 Dongle & Relay Firmware
-│   ├── firmware.ino               # Main entrypoint & RTOS loop scheduling
-│   ├── mac.cpp / mac.h            # Slotted ALOHA / CSMA-CAD channel access layer
-│   ├── mesh.cpp / mesh.h          # Mesh state engine & node lifecycle manager
-│   ├── store.cpp / store.h        # SPI Flash circular buffer store-and-forward storage engine
-│   ├── routing.cpp / routing.h    # Local Geographic Forwarding (Greedy Perimeter Stateless Routing)
-│   ├── packet.cpp / packet.h      # 32-byte binary LoRa frame serializer & CRC-8 engine
-│   ├── radio.cpp / radio.h        # Semtech SX1262 / SX1278 SPI transceiver driver
-│   ├── phone.cpp / phone.h        # USB CDC-ACM serial link parser (Phone ↔ Dongle wire protocol)
-│   ├── gps.cpp / gps.h            # u-blox NEO-6M NMEA sentence parser & coordinate stamper
-│   ├── neighbor.cpp / neighbor.h  # Neighbor table, link quality tracking, & beacon monitor
-│   ├── timesync.cpp / timeutil.cpp# Sub-second distributed network time synchronization
-│   └── partitions.csv             # 4MB ESP32 flash partition table (NVS + 1.5MB Store Buffer)
+├── firmware/                      # Bare-metal C++ / Arduino ESP32-C3 Firmware
+│   ├── firmware.ino               # Unified, self-contained multi-role sketch (Dongle, Relay, Helper)
+│   └── README.md                  # Arduino build, flashing instructions & role definitions
 │
 ├── survivor_app/                  # Survivor Emergency Smartphone PWA (Civilian Client)
 │   ├── src/
@@ -223,12 +213,12 @@ When `autoBridgeGaps()` executes:
 ### 6.1 Phone ↔ Dongle USB Protocol (`docs/usb-protocol.md`)
 Communicates over USB CDC-ACM at $115{,}200\text{ baud}$ using plain text commands terminated with CRLF (`\r\n`):
 
-| Direction | Command / Response | Parameters / Format | Description |
+| Direction | Type | Example JSON Payload | Description |
 | :--- | :--- | :--- | :--- |
-| **Phone $\to$ Dongle** | `SEND` | `<msg_id>\|<prio>\|<flags>\|<people>\|<lat>,<lon>` | Dispatches new SOS packet to radio |
-| **Phone $\to$ Dongle** | `INFO?` | *None* | Queries dongle hardware and mesh status |
-| **Dongle $\to$ Phone** | `STATUS` | `<msg_id>\|<state>\|<detail>` | States: `SAVED`, `WAITING`, `AIR`, `DELIVERED`, `FAILED` |
-| **Dongle $\to$ Phone** | `INFO` | `FW=<ver>\|NODE=<id>\|BAT=<pct>\|RADIO=<status>` | Telemetry reporting |
+| **Phone $\to$ Dongle** | `send` | `{"type":"send","people":3,"flags":3,"lat":27.68,"lon":85.32,"alt":1300,"acc":10,"time":1761217205}` | Dispatches new SOS payload to dongle |
+| **Phone $\to$ Dongle** | `info_request` | `{"type":"info_request"}` | Requests dongle status & candidate node count |
+| **Dongle $\to$ Phone** | `status` | `{"type":"status","id":"2001-00042","state":"STORED"}` | Reports message lifecycle (`QUEUED`, `STORED`, `SENT_TO_MESH`, `DELIVERED`, `WAITING`, `FAILED`) |
+| **Dongle $\to$ Phone** | `info` | `{"type":"info","battery":null,"nodes":2}` | Reports active neighbor infrastructure count |
 
 ### 6.2 LoRa Binary Frame Format (`docs/packet-design.md`, Rev 5)
 Every radio frame is packed into an ultra-compact **32-byte binary struct**:
@@ -316,18 +306,20 @@ The mobile client runs in Chrome on an Android smartphone connected to the ESP32
 
 ---
 
-### Component C: Flashing ESP32-C3 Dongle & Relay Firmware (`firmware/`)
+### Component C: Flashing ESP32-C3 Firmware (`firmware/firmware.ino`)
 
 1. Open `firmware/firmware.ino` in the Arduino IDE.
-2. Select Board: **ESP32C3 Dev Module** (or Super Mini ESP32-C3).
-3. Configuration Settings:
-   * **USB CDC On Boot:** `Enabled`
-   * **Flash Size:** `4MB (32Mb)`
-   * **Partition Scheme:** Custom `partitions.csv` (provided in `firmware/partitions.csv`)
-4. Install Required Libraries:
-   * `RadioLib` (v6.0+ for SX1262 / SX1278 SPI control)
-   * `TinyGPSPlus` (for NEO-6M NMEA sentence parsing)
-5. Connect ESP32-C3 via USB-C and click **Upload**.
+2. Select target role at top of sketch (set exactly one to `1`):
+   * `#define IS_DONGLE 1` (Dongle plugged into civilian phone)
+   * `#define IS_RELAY 1` (Rooftop ground node or tethered aerostat balloon)
+   * `#define IS_HELPER 1` (Base Camp rescue HQ, prints to PC/dashboard)
+3. Board Configuration:
+   * Board: **ESP32C3 Dev Module** (esp32 by Espressif 3.x)
+   * USB CDC On Boot: **Enabled**
+4. Required Libraries (Library Manager):
+   * **LoRa** by Sandeep Mistry
+   * **ArduinoJson** by Benoit Blanchon (v7.x)
+5. Connect ESP32-C3 via USB-C and click **Upload**. Output logs at `115200` baud with `#` debug lines and `@{...}` JSON events.
 
 ---
 
