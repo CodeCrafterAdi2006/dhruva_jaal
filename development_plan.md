@@ -107,7 +107,12 @@ gantt
      });
      map.setTerrain({ source: 'kathmandu-dem', exaggeration: 1.25 });
      ```
-  2. Add atmospheric `map.setSky({ 'sky-color': '#060d1a', 'fog-color': '#0d1829', 'fog-ground-blend': 0.7 })`.
+  2. Add atmospheric sky fog with safe feature check:
+     ```javascript
+     if (typeof map.setSky === 'function') {
+       map.setSky({ 'sky-color': '#060d1a', 'fog-color': '#0d1829', 'fog-ground-blend': 0.7 });
+     }
+     ```
   3. Ensure automatic graceful degradation: if tiles fail to fetch, cleanly revert to the tactical 2.5D offline grid.
 
 #### Step 1.2: OpenFreeMap Vector Tile Buildings (Dodge Trap 1)
@@ -134,16 +139,26 @@ gantt
      * Color: semi-translucent deep blue (`rgba(14, 116, 244, 0.40)`).
   3. Protect against terrain clipping by constraining exaggeration to $1.25\times$. Ground relays `N3` and `N6` physically submerge underwater before their status switches to down.
 
-#### Step 1.4: Projective Canvas 3D Parabolic Sky-Arcs & Tether Cables (Dodge Trap 2)
+#### Step 1.4: Projective Canvas 3D Parabolic Sky-Arcs & Tether Cables (Dodge Trap 2 + HiDPI Scaling)
 * **File:** [`frontend/src/map/LinkPacketLayer.js`](file:///c:/AI%20Native%20founder/Hackathon_projects/octo_gdg_hackathon/frontend/src/map/LinkPacketLayer.js)
 * **Tasks:**
   1. Overlay an HTML5 `<canvas id="sky-arc-canvas">` synchronized with map render events (`map.on('render', ...)`).
-  2. For aerial links ($N_1 \to DR1$, $N_5 \to DR1$, $N_1 \to BL1$, $BL1 \to BL2$, $BL2 \to N_8$):
+  2. Apply HiDPI canvas scaling (`window.devicePixelRatio || 1`) so 3D Bezier curves and badges look razor-sharp on Retina/HiDPI screens:
+     ```javascript
+     const dpr = window.devicePixelRatio || 1;
+     const rect = this.map.getCanvas().getBoundingClientRect();
+     canvas.width = rect.width * dpr;
+     canvas.height = rect.height * dpr;
+     canvas.style.width = `${rect.width}px`;
+     canvas.style.height = `${rect.height}px`;
+     ctx.scale(dpr, dpr);
+     ```
+  3. For aerial links ($N_1 \to DR1$, $N_5 \to DR1$, $N_1 \to BL1$, $BL1 \to BL2$, $BL2 \to N_8$):
      * Calculate screen-space ground coordinates via `map.project([lon, lat])`.
      * Offset airborne nodes vertically by altitude pixels: $y_{\text{screen}} - (alt_{\text{meters}} \cdot \text{scaleFactor})$.
      * Draw glowing Quadratic Bezier curves peaking in the air.
-  3. Render vertical tether lines from ground anchors to $100\text{ m}$ aerostats.
-  4. Render radial translucent LoS coverage cones projecting downward from `BL1` and `BL2`.
+  4. Render vertical tether lines from ground anchors to $100\text{ m}$ aerostats.
+  5. Render radial translucent LoS coverage cones projecting downward from `BL1` and `BL2`.
 
 #### Step 1.5: Make-Before-Break "Zero Packet Loss" HUD Banner (New Feature 1)
 * **Files:** [`frontend/src/hud.css`](file:///c:/AI%20Native%20founder/Hackathon_projects/octo_gdg_hackathon/frontend/src/hud.css), [`frontend/src/main.js`](file:///c:/AI%20Native%20founder/Hackathon_projects/octo_gdg_hackathon/frontend/src/main.js)
