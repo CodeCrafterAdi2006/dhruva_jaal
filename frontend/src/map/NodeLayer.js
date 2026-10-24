@@ -122,10 +122,9 @@ export class NodeLayer {
       el.addEventListener('click', (e) => {
         e.stopPropagation();
         if (window.currentSandboxTool === 'submerge-relay') {
-          if (node.role === 'relay' || node.role === 'dongle') {
-            window.engine?.submergeRelay(node.id);
-            return;
-          }
+          window.engine?.submergeRelay(node.id);
+          window.setSandboxTool?.(null);
+          return;
         }
         this.openNodePopup(node.id, [node.lon, node.lat]);
       });
@@ -200,6 +199,11 @@ export class NodeLayer {
 
       el.addEventListener('click', (e) => {
         e.stopPropagation();
+        if (window.currentSandboxTool === 'submerge-relay') {
+          window.engine?.submergeRelay(node.id);
+          window.setSandboxTool?.(null);
+          return;
+        }
         const currentLngLat = marker.getLngLat();
         this.openNodePopup(node.id, [currentLngLat.lng, currentLngLat.lat]);
       });
@@ -309,9 +313,14 @@ export class NodeLayer {
       // Clean up recalled/deleted dynamic aerial markers
       const currentActiveIds = new Set(state.nodes.map(n => n.id));
       this.aerialMarkers.forEach((markerObj, id) => {
-        if (markerObj.data.isDynamic && !currentActiveIds.has(id)) {
-          markerObj.marker.remove();
-          this.aerialMarkers.delete(id);
+        const nodeState = state.nodes.find(n => n.id === id);
+        if (!currentActiveIds.has(id) || (nodeState && (nodeState.status === 'down' || nodeState.visible === false))) {
+          if (markerObj.data.isDynamic) {
+            markerObj.marker.remove();
+            this.aerialMarkers.delete(id);
+          } else {
+            markerObj.element.style.display = 'none';
+          }
         }
       });
 
@@ -327,7 +336,7 @@ export class NodeLayer {
         if (nodeState.targetPos) markerObj.targetPos = nodeState.targetPos;
 
         const { marker, element, data, basePos, targetPos } = markerObj;
-        const isVisible = nodeState.visible && nodeState.flightProgress > 0;
+        const isVisible = nodeState.visible && nodeState.flightProgress > 0 && nodeState.status !== 'down';
 
         if (isVisible) {
           element.style.display = 'flex';
@@ -482,6 +491,7 @@ export class NodeLayer {
       e.stopPropagation();
       if (window.currentSandboxTool === 'submerge-relay') {
         window.engine?.submergeRelay(node.id);
+        window.setSandboxTool?.(null);
         return;
       }
       this.openNodePopup(node.id, [node.lon, node.lat]);
@@ -553,6 +563,11 @@ export class NodeLayer {
 
     el.addEventListener('click', (e) => {
       e.stopPropagation();
+      if (window.currentSandboxTool === 'submerge-relay') {
+        window.engine?.submergeRelay(node.id);
+        window.setSandboxTool?.(null);
+        return;
+      }
       const currentLngLat = marker.getLngLat();
       this.openNodePopup(node.id, [currentLngLat.lng, currentLngLat.lat]);
     });

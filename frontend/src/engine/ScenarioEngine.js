@@ -132,15 +132,72 @@ export class ScenarioEngine extends DataSource {
   }
 
   /**
-   * Tactical Sandbox: Submerge Relay Node on Click (User clicks Submerge Relay tool, then clicks relay)
+   * Tactical Sandbox: Submerge or Remove Node on Click
+   * Handles ground relays, survivors, drones, and aerostat balloons.
    */
   submergeRelay(nodeId) {
     if (!nodeId) return null;
+
+    // 1. Dynamic Drone removal
+    if (this.dynamicDrones.has(nodeId)) {
+      this.dynamicDrones.delete(nodeId);
+      this.dynamicEdges = this.dynamicEdges.filter(e => e.a !== nodeId && e.b !== nodeId);
+      this.manualKilledNodes.add(nodeId);
+      this.emit('aerial', {
+        type: 'drones_return',
+        ids: [nodeId],
+        simClock: 'RECALLED'
+      });
+      this.emit('node_status', {
+        id: nodeId,
+        status: 'down',
+        reason: 'Recalled / Removed from network'
+      });
+      this.checkSurvivorBeacons(true);
+      const updatedState = this.reconstructStateAt(this.currentTime);
+      this.emit('state_update', updatedState);
+      return nodeId;
+    }
+
+    // 2. Dynamic Balloon removal
+    if (this.dynamicBalloons.has(nodeId)) {
+      this.dynamicBalloons.delete(nodeId);
+      this.dynamicEdges = this.dynamicEdges.filter(e => e.a !== nodeId && e.b !== nodeId);
+      this.manualKilledNodes.add(nodeId);
+      this.emit('node_status', {
+        id: nodeId,
+        status: 'down',
+        reason: 'Deflated / Removed from network'
+      });
+      this.checkSurvivorBeacons(true);
+      const updatedState = this.reconstructStateAt(this.currentTime);
+      this.emit('state_update', updatedState);
+      return nodeId;
+    }
+
+    // 3. Dynamic Survivor / Relay removal
+    if (this.dynamicNodes.has(nodeId)) {
+      this.dynamicNodes.delete(nodeId);
+      this.survivorBeacons.delete(nodeId);
+      this.dynamicEdges = this.dynamicEdges.filter(e => e.a !== nodeId && e.b !== nodeId);
+      this.manualKilledNodes.add(nodeId);
+      this.emit('node_status', {
+        id: nodeId,
+        status: 'down',
+        reason: 'Removed from network'
+      });
+      this.checkSurvivorBeacons(true);
+      const updatedState = this.reconstructStateAt(this.currentTime);
+      this.emit('state_update', updatedState);
+      return nodeId;
+    }
+
+    // 4. Static node (Relay, Dongle, Helper, or Static Aerial DR1/DR2/BL1/BL2)
     this.manualKilledNodes.add(nodeId);
     this.emit('node_status', {
       id: nodeId,
       status: 'down',
-      reason: 'Submerged by rising floodwaters'
+      reason: 'Submerged / Disabled by operator'
     });
 
     // Re-check all active survivor beacons to see if routes are broken or need re-routing
@@ -1397,14 +1454,6 @@ export class ScenarioEngine extends DataSource {
       activeNodes.get('N3').reason = 'Submerged by Bagmati flash surge (3.2m water)';
     }
 
-    // Apply manual user overrides (Simulate Disaster / 'K' key / Submerge Relay Tool)
-    this.manualKilledNodes.forEach(id => {
-      if (activeNodes.has(id)) {
-        activeNodes.get(id).status = 'down';
-        activeNodes.get(id).reason = 'Manual disaster trigger';
-      }
-    });
-
     // Apply manual aerial deployments (Tactical Sandbox)
     this.manualAerialDeployed.forEach(id => {
       if (activeNodes.has(id)) {
@@ -1416,21 +1465,39 @@ export class ScenarioEngine extends DataSource {
 
     // Merge dynamically injected nodes (Tactical Sandbox)
     this.dynamicNodes.forEach((dynNode, id) => {
-      const beacon = this.survivorBeacons.get(id);
-      activeNodes.set(id, {
-        ...dynNode,
-        isAcknowledged: Boolean(beacon?.isAcknowledged),
-        storedInFlash: Boolean(beacon?.storedInFlash),
-        beaconAttempts: beacon?.beaconAttempts || 0
-      });
+      if (!this.manualKilledNodes.has(id)) {
+        const beacon = this.survivorBeacons.get(id);
+        activeNodes.set(id, {
+          ...dynNode,
+          isAcknowledged: Boolean(beacon?.isAcknowledged),
+          storedInFlash: Boolean(beacon?.storedInFlash),
+          beaconAttempts: beacon?.beaconAttempts || 0
+        });
+      }
     });
 
     // Merge dynamically injected drones and balloons (Tactical Sandbox)
     this.dynamicDrones.forEach((drone, id) => {
-      activeNodes.set(id, { ...drone });
+      if (!this.manualKilledNodes.has(id)) {
+        activeNodes.set(id, { ...drone });
+      }
     });
     this.dynamicBalloons.forEach((balloon, id) => {
-      activeNodes.set(id, { ...balloon });
+      if (!this.manualKilledNodes.has(id)) {
+        activeNodes.set(id, { ...balloon });
+      }
+    });
+
+    // Apply manual user overrides (Simulate Disaster / 'K' key / Submerge Relay Tool)
+    this.manualKilledNodes.forEach(id => {
+      if (activeNodes.has(id)) {
+        const nodeObj = activeNodes.get(id);
+        nodeObj.status = 'down';
+        nodeObj.reason = 'Manual disaster trigger';
+        if (nodeObj.role === 'drone' || nodeObj.role === 'balloon') {
+          nodeObj.visible = false;
+        }
+      }
     });
 
     // N1 survivor distress cycles across timeline parts:

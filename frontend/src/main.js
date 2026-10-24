@@ -415,11 +415,12 @@ mapManager.init().then(map => {
       currentSandboxTool = tool;
     }
     window.currentSandboxTool = currentSandboxTool;
+    window.setSandboxTool = setSandboxTool;
 
     const hintEl = document.querySelector('#sandbox-bar .sandbox-hint');
     const toolDefs = [
       { id: 'sb-drop-node', name: 'drop-survivor', label: 'Drop Survivor', hint: 'Click anywhere on map to deploy a stranded survivor node' },
-      { id: 'sb-kill-node', name: 'submerge-relay', label: 'Submerge Relay', hint: 'Click any blue relay node on the map to submerge it under water' },
+      { id: 'sb-kill-node', name: 'submerge-relay', label: 'Remove Node', hint: 'Click any node on the map (relay, drone, balloon, or survivor) to remove it' },
       { id: 'sb-drone', name: 'deploy-drone', label: 'Deploy Drone', hint: 'Click anywhere on map to dispatch drone from Base Camp' },
       { id: 'sb-balloon', name: 'deploy-balloon', label: 'Deploy Balloon', hint: 'Click anywhere on map to launch 100m aerostat balloon' }
     ];
@@ -525,19 +526,19 @@ mapManager.init().then(map => {
       }
 
     } else if (currentSandboxTool === 'submerge-relay') {
-      // Find closest online relay within 350 meters
+      // Find closest online node within 450 meters (relay, dongle, drone, balloon)
       const state = engine.reconstructStateAt(engine.currentTime);
-      const onlineRelays = state.nodes.filter(n => (n.role === 'relay' || n.role === 'dongle') && n.status === 'online');
+      const onlineNodes = state.nodes.filter(n => n.status === 'online' && n.visible !== false);
       let closest = null;
       let minDist = Infinity;
-      onlineRelays.forEach(n => {
+      onlineNodes.forEach(n => {
         const d = engine.calculateDistanceMeters(lng, lat, n.lon, n.lat);
         if (d < minDist) {
           minDist = d;
           closest = n;
         }
       });
-      if (closest && minDist <= 350) {
+      if (closest && minDist <= 450) {
         engine.submergeRelay(closest.id);
         setSandboxTool(null);
       }
@@ -796,8 +797,8 @@ function injectBottomBars() {
         <button class="sb-tool-btn" id="sb-drop-node" title="Click anywhere on the map to drop a survivor node">
           Drop Survivor
         </button>
-        <button class="sb-tool-btn" id="sb-kill-node" title="Click any blue relay to submerge it under rising floodwaters">
-          Submerge Relay
+        <button class="sb-tool-btn" id="sb-kill-node" title="Click any node on the map (relay, drone, balloon, or survivor) to remove or submerge it">
+          Remove Node
         </button>
         <button class="sb-tool-btn" id="sb-drone" title="Dispatch aerial drone (Fleet limit 6 · Auto-promotes stationed drone to balloon if exceeded)">
           Deploy Drone
