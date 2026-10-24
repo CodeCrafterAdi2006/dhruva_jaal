@@ -526,7 +526,7 @@ mapManager.init().then(map => {
       }
 
     } else if (currentSandboxTool === 'submerge-relay') {
-      // Find closest online node within 450 meters (relay, dongle, drone, balloon)
+      // Find closest online node within 650 meters (relay, dongle, drone, balloon)
       const state = engine.reconstructStateAt(engine.currentTime);
       const onlineNodes = state.nodes.filter(n => n.status === 'online' && n.visible !== false);
       let closest = null;
@@ -538,8 +538,16 @@ mapManager.init().then(map => {
           closest = n;
         }
       });
-      if (closest && minDist <= 450) {
+      if (closest && minDist <= 650) {
         engine.submergeRelay(closest.id);
+        if (nodeLayer.aerialMarkers?.has(closest.id)) {
+          nodeLayer.aerialMarkers.get(closest.id).marker.remove();
+          nodeLayer.aerialMarkers.delete(closest.id);
+        }
+        if (nodeLayer.nodeMarkers?.has(closest.id)) {
+          nodeLayer.nodeMarkers.get(closest.id).marker.remove();
+          nodeLayer.nodeMarkers.delete(closest.id);
+        }
         setSandboxTool(null);
       }
     }

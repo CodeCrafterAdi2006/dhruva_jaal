@@ -892,13 +892,40 @@ export class ScenarioEngine extends DataSource {
   }
 
   /**
-   * Remove a dynamic node and its attached edges
+   * Remove a dynamic node, drone, balloon, or relay and its attached edges
    */
   removeDynamicNode(nodeId) {
+    if (!nodeId) return;
+
+    if (this.dynamicDrones.has(nodeId)) {
+      this.dynamicDrones.delete(nodeId);
+      this.emit('aerial', {
+        type: 'drones_return',
+        ids: [nodeId],
+        simClock: 'RECALLED'
+      });
+      this.emit('node_status', {
+        id: nodeId,
+        status: 'down',
+        reason: 'Recalled / Removed from network'
+      });
+    }
+
+    if (this.dynamicBalloons.has(nodeId)) {
+      this.dynamicBalloons.delete(nodeId);
+      this.emit('node_status', {
+        id: nodeId,
+        status: 'down',
+        reason: 'Deflated / Removed from network'
+      });
+    }
+
     this.dynamicNodes.delete(nodeId);
+    this.manualKilledNodes.add(nodeId);
     this.survivorBeacons.delete(nodeId);
     this.dynamicEdges = this.dynamicEdges.filter(e => e.a !== nodeId && e.b !== nodeId);
     this.dynamicSosList = this.dynamicSosList.filter(s => s.from !== nodeId);
+    this.checkSurvivorBeacons(true);
     const state = this.reconstructStateAt(this.currentTime);
     this.emit('state_update', state);
   }

@@ -314,12 +314,14 @@ export class NodeLayer {
       const currentActiveIds = new Set(state.nodes.map(n => n.id));
       this.aerialMarkers.forEach((markerObj, id) => {
         const nodeState = state.nodes.find(n => n.id === id);
-        if (!currentActiveIds.has(id) || (nodeState && (nodeState.status === 'down' || nodeState.visible === false))) {
-          if (markerObj.data.isDynamic) {
+        if (!currentActiveIds.has(id)) {
+          markerObj.marker.remove();
+          this.aerialMarkers.delete(id);
+        } else if (nodeState && (nodeState.status === 'down' || nodeState.visible === false)) {
+          markerObj.element.style.display = 'none';
+          if (markerObj.data?.isDynamic || id.startsWith('DR-') || id.startsWith('BL-')) {
             markerObj.marker.remove();
             this.aerialMarkers.delete(id);
-          } else {
-            markerObj.element.style.display = 'none';
           }
         }
       });
@@ -565,6 +567,8 @@ export class NodeLayer {
       e.stopPropagation();
       if (window.currentSandboxTool === 'submerge-relay') {
         window.engine?.submergeRelay(node.id);
+        marker.remove();
+        this.aerialMarkers.delete(node.id);
         window.setSandboxTool?.(null);
         return;
       }
@@ -612,15 +616,22 @@ export class NodeLayer {
         }
         this.activePopup?.remove();
       }
-      if (e.target.closest('#btn-dyn-remove')) {
+      if (e.target.closest('#btn-dyn-remove') || e.target.closest('#btn-aerial-remove')) {
         if (window.engine) {
+          window.engine.submergeRelay(nodeId);
           window.engine.removeDynamicNode(nodeId);
         }
         if (this.nodeMarkers.has(nodeId)) {
           this.nodeMarkers.get(nodeId).marker.remove();
           this.nodeMarkers.delete(nodeId);
         }
+        if (this.aerialMarkers.has(nodeId)) {
+          this.aerialMarkers.get(nodeId).marker.remove();
+          this.aerialMarkers.delete(nodeId);
+        }
         this.activePopup?.remove();
+        this.activePopup = null;
+        this.selectedNodeId = null;
       }
     });
 
@@ -669,6 +680,52 @@ export class NodeLayer {
           </div>
           <div class="popup-notice ${isOnline ? 'notice-info' : 'notice-alert'}">
             ${isOnline ? 'Serving standard civilian smartphones. Vulnerable to flood-induced power cuts.' : 'Flooding severed municipal power grid and terrestrial fiber backhaul.'}
+          </div>
+        </div>
+      `;
+    }
+
+    // Dynamic Aerial Drone or Balloon
+    const dynamicAerial = this.latestState?.nodes?.find(n => n.id === nodeId && (n.role === 'drone' || n.role === 'balloon'));
+    if (dynamicAerial) {
+      const isDrone = dynamicAerial.role === 'drone';
+      const badgeText = isDrone ? 'AERIAL DRONE (80m)' : 'AEROSTAT BALLOON (100m)';
+      const badgeClass = isDrone ? 'badge-drone' : 'badge-balloon';
+      const edges = (this.latestState?.edges || []).filter(e => e.a === nodeId || e.b === nodeId);
+      const peersText = edges.length > 0
+        ? edges.map(e => e.a === nodeId ? e.b : e.a).join(', ')
+        : 'None (searching)';
+
+      return `
+        <div class="popup-header">
+          <div class="popup-badge ${badgeClass}">${badgeText}</div>
+          <div class="popup-title">${dynamicAerial.label || dynamicAerial.id}</div>
+          <button class="popup-close-btn" title="Close">✕</button>
+        </div>
+        <div class="popup-body">
+          <div class="popup-row">
+            <span class="popup-label">ALTITUDE</span>
+            <span class="popup-val" style="color:#ffb020;font-weight:700;">${isDrone ? '80m Hover' : '100m Tethered'}</span>
+          </div>
+          <div class="popup-row">
+            <span class="popup-label">COORDINATES</span>
+            <span class="popup-val">${dynamicAerial.lat.toFixed(4)}° N, ${dynamicAerial.lon.toFixed(4)}° E</span>
+          </div>
+          <div class="popup-row">
+            <span class="popup-label">RF BRIDGED PEERS</span>
+            <span class="popup-val" style="color:#00f0ff;font-weight:700;">${peersText}</span>
+          </div>
+          <div class="popup-row">
+            <span class="popup-label">STATUS</span>
+            <span class="popup-val val-online">● Airborne Relay Active</span>
+          </div>
+          <div class="popup-notice notice-info" style="margin-top:8px;font-size:11px;">
+            ${isDrone ? 'Agile RF bridge forming LoRa mesh links across flooded sectors.' : 'Persistent elevated aerostat relay overcoming urban terrain shadowing.'}
+          </div>
+          <div style="margin-top:10px;display:flex;flex-direction:column;gap:6px;">
+            <button id="btn-dyn-remove" style="background:#ef4444;color:white;border:none;padding:7px 10px;border-radius:4px;font-weight:700;cursor:pointer;font-size:11px;display:flex;align-items:center;justify-content:center;gap:6px;">
+              ✕ ${isDrone ? 'Recall & Remove Drone' : 'Deflate & Remove Balloon'}
+            </button>
           </div>
         </div>
       `;
@@ -804,6 +861,13 @@ export class NodeLayer {
         <div class="popup-peers-list">
           ${peersHtml}
         </div>
+        ${window.engine?.activeMode === 'sandbox' && node.id !== 'N8' ? `
+          <div style="margin-top:10px;">
+            <button id="btn-dyn-remove" style="width:100%;background:rgba(239,68,68,0.15);color:#ef4444;border:1px solid #ef4444;padding:6px 10px;border-radius:4px;font-weight:600;cursor:pointer;font-size:11px;">
+              ✕ ${node.role === 'drone' ? 'Recall & Remove Drone' : node.role === 'balloon' ? 'Deflate & Remove Balloon' : 'Submerge / Remove Node'}
+            </button>
+          </div>
+        ` : ''}
       </div>
     `;
   }
